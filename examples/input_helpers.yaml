@@ -1,0 +1,165 @@
+# HA Custom Dashboard Strategy - Input Helpers Configuration
+# 
+# Copy this to your configuration.yaml or create via UI
+# These helpers store the dashboard configuration
+
+input_boolean:
+  # Overview page settings
+  ha_custom_show_welcome:
+    name: "Dashboard: Begrüßung anzeigen"
+    icon: mdi:hand-wave
+    initial: true
+
+  ha_custom_show_areas:
+    name: "Dashboard: Raumübersicht anzeigen"
+    icon: mdi:home-group
+    initial: true
+
+  ha_custom_show_security:
+    name: "Dashboard: Sicherheitsstatus anzeigen"
+    icon: mdi:shield-home
+    initial: true
+
+  ha_custom_show_light_summary:
+    name: "Dashboard: Licht-Zusammenfassung anzeigen"
+    icon: mdi:lightbulb-group
+    initial: true
+
+  ha_custom_show_battery_status:
+    name: "Dashboard: Batteriestatus anzeigen"
+    icon: mdi:battery
+    initial: true
+
+  # Statistics settings
+  ha_custom_show_energy_stats:
+    name: "Dashboard: Energie-Statistiken anzeigen"
+    icon: mdi:lightning-bolt
+    initial: true
+
+  ha_custom_show_climate_stats:
+    name: "Dashboard: Klima-Statistiken anzeigen"
+    icon: mdi:thermometer
+    initial: true
+
+  ha_custom_show_system_health:
+    name: "Dashboard: System-Gesundheit anzeigen"
+    icon: mdi:server
+    initial: true
+
+  ha_custom_show_network_stats:
+    name: "Dashboard: Netzwerk-Statistiken anzeigen"
+    icon: mdi:network
+    initial: false
+
+  # Advanced settings
+  ha_custom_debug_mode:
+    name: "Dashboard: Debug-Modus"
+    icon: mdi:bug
+    initial: false
+
+input_select:
+  # Theme settings
+  ha_custom_theme_mode:
+    name: "Dashboard: Theme-Modus"
+    icon: mdi:theme-light-dark
+    options:
+      - light
+      - dark
+      - auto
+    initial: auto
+
+  ha_custom_color_scheme:
+    name: "Dashboard: Farbschema"
+    icon: mdi:palette
+    options:
+      - default
+      - blue
+      - green
+      - purple
+      - orange
+      - red
+    initial: default
+
+input_text:
+  # Weather entity override
+  ha_custom_weather_entity:
+    name: "Dashboard: Wetter-Entität"
+    icon: mdi:weather-partly-cloudy
+    initial: ""
+    max: 255
+
+# Optional: Scripts for advanced operations
+script:
+  ha_custom_save_config:
+    alias: "Dashboard: Konfiguration speichern"
+    sequence:
+      - service: persistent_notification.create
+        data:
+          title: "Dashboard-Konfiguration"
+          message: "Konfiguration wurde gespeichert."
+          notification_id: ha_custom_config_saved
+
+  ha_custom_reset_config:
+    alias: "Dashboard: Konfiguration zurücksetzen"
+    sequence:
+      # Reset all input helpers to defaults
+      - service: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.ha_custom_show_welcome
+            - input_boolean.ha_custom_show_areas
+            - input_boolean.ha_custom_show_security
+            - input_boolean.ha_custom_show_light_summary
+            - input_boolean.ha_custom_show_battery_status
+            - input_boolean.ha_custom_show_energy_stats
+            - input_boolean.ha_custom_show_climate_stats
+            - input_boolean.ha_custom_show_system_health
+      - service: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.ha_custom_show_network_stats
+            - input_boolean.ha_custom_debug_mode
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.ha_custom_theme_mode
+        data:
+          option: auto
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.ha_custom_color_scheme
+        data:
+          option: default
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ha_custom_weather_entity
+        data:
+          value: ""
+      - service: persistent_notification.create
+        data:
+          title: "Dashboard-Konfiguration"
+          message: "Konfiguration wurde zurückgesetzt."
+          notification_id: ha_custom_config_reset
+
+  ha_custom_export_config:
+    alias: "Dashboard: Konfiguration exportieren"
+    sequence:
+      - service: persistent_notification.create
+        data:
+          title: "Dashboard-Konfiguration exportieren"
+          message: |
+            Aktuelle Konfiguration:
+            
+            Theme: {{ states('input_select.ha_custom_theme_mode') }}
+            Farbschema: {{ states('input_select.ha_custom_color_scheme') }}
+            
+            Begrüßung: {{ states('input_boolean.ha_custom_show_welcome') }}
+            Räume: {{ states('input_boolean.ha_custom_show_areas') }}
+            Sicherheit: {{ states('input_boolean.ha_custom_show_security') }}
+            Lichter: {{ states('input_boolean.ha_custom_show_light_summary') }}
+            Batterien: {{ states('input_boolean.ha_custom_show_battery_status') }}
+            
+            Energie-Stats: {{ states('input_boolean.ha_custom_show_energy_stats') }}
+            Klima-Stats: {{ states('input_boolean.ha_custom_show_climate_stats') }}
+            System-Health: {{ states('input_boolean.ha_custom_show_system_health') }}
+            Netzwerk-Stats: {{ states('input_boolean.ha_custom_show_network_stats') }}
+          notification_id: ha_custom_config_export
