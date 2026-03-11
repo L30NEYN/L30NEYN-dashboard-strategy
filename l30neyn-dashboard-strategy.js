@@ -15,8 +15,8 @@
 
   // Version and configuration
   const VERSION = '1.1.0';
-  const STRATEGY_NAME = 'll-strategy-l30neyn-dashboard'; // Full name with prefix (dashboard strategies)
-  const BASE_PATH = '/hacsfiles/l30neyn-dashboard-strategy';
+  const STRATEGY_NAME = 'll-strategy-l30neyn'; // Strategy element name
+  const BASE_PATH = '/local/community/l30neyn-dashboard-strategy'; // HACS install path
   
   // Display load banner
   console.info(
@@ -65,6 +65,7 @@
       
       script.onerror = (error) => {
         console.error(`[L30NEYN] Failed to load: ${modulePath}`, error);
+        console.error(`[L30NEYN] Full path: ${BASE_PATH}/${modulePath}`);
         reject(new Error(`Failed to load ${modulePath}`));
       };
       
@@ -77,6 +78,7 @@
    */
   async function loadAllModules() {
     console.debug(`[L30NEYN] Starting to load ${totalModules} modules...`);
+    console.debug(`[L30NEYN] Base path: ${BASE_PATH}`);
     
     try {
       for (const module of modules) {
@@ -99,10 +101,8 @@
       
       // Show user-friendly error
       const errorMsg = `L30NEYN Dashboard Strategy failed to load. Check browser console for details.`;
-      if (window.customElements && customElements.get('hui-error-card')) {
-        // Try to show error in dashboard
-        console.error(errorMsg);
-      }
+      console.error(errorMsg);
+      console.error('[L30NEYN] Verify files are installed in: /config/www/community/l30neyn-dashboard-strategy/');
     }
   }
 
