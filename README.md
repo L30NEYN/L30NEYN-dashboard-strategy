@@ -134,10 +134,10 @@ Diese Strategie benötigt Mushroom Cards für die UI.
 ```yaml
 title: L30NEYN Dashboard
 strategy:
-  type: custom:ll-strategy-l30neyn-dashboard
+  type: custom:l30neyn
 ```
 
-**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
+**Wichtig:** Der `type` ist `custom:l30neyn` (OHNE `ll-strategy-` Prefix - HA fügt das automatisch hinzu!)
 
 ## 🎨 Konfiguration
 
@@ -174,7 +174,7 @@ YAML-Config wird als Override unterstützt:
 
 ```yaml
 strategy:
-  type: custom:ll-strategy-l30neyn-dashboard
+  type: custom:l30neyn
   options:
     theme_mode: dark
     color_scheme: blue
@@ -322,7 +322,7 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 - 📦 HACS-kompatible Struktur
 
 **Fixes:**
-- 🔧 Strategy-Registrierung korrigiert
+- 🔧 Strategy-Registrierung korrigiert (`custom:l30neyn`)
 - 🔗 Repository-Referenzen aktualisiert
 
 **Performance:**
