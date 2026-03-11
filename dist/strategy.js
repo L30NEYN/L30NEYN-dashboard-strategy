@@ -128,8 +128,9 @@ class L30NEYNDashboardStrategy {
 }
 
 // Register Dashboard Strategy
-// Element name: ll-strategy-dashboard-l30neyn (matches HA's 'll-strategy-dashboard-' prefix)
-// Usage in YAML: type: custom:dashboard-l30neyn
+// WICHTIG: HA fügt automatisch 'll-strategy-dashboard-' vor dem Namen hinzu!
+// Element name: ll-strategy-dashboard-l30neyn
+// Usage in YAML: type: custom:l30neyn
 customElements.define(
   'll-strategy-dashboard-l30neyn',
   class extends HTMLElement {
