@@ -1,0 +1,7 @@
+{
+  "name": "HA Custom Dashboard Strategy",
+  "content_in_root": false,
+  "filename": "ha-custom-dashboard-strategy.js",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}
