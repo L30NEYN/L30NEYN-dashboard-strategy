@@ -3,9 +3,10 @@
  * 
  * A modular, performant Home Assistant dashboard strategy.
  * Automatically generates overview and room views with grouped entity controls.
+ * Now with settings panel, theme management, and statistics.
  * 
  * @author Leon Heyn
- * @version 1.0.0
+ * @version 1.1.0
  * @license MIT
  */
 
@@ -16,9 +17,14 @@ class HaCustomDashboardStrategy {
 
     const { hass, config } = info;
 
-    // Load strategy config from storage
-    const strategyConfig = await this.loadConfig(hass);
+    // Load strategy config from config manager
+    const strategyConfig = await window.HaCustomConfigManager.loadConfig(hass);
     const mergedConfig = { ...config, ...strategyConfig };
+
+    // Apply theme
+    if (window.HaCustomThemeManager) {
+      window.HaCustomThemeManager.applyTheme(hass, mergedConfig);
+    }
 
     // Fetch registries
     const registry = await this.fetchRegistries(hass);
@@ -40,7 +46,7 @@ class HaCustomDashboardStrategy {
     const { hass, config, view } = info;
 
     // Load strategy config
-    const strategyConfig = await this.loadConfig(hass);
+    const strategyConfig = await window.HaCustomConfigManager.loadConfig(hass);
     const mergedConfig = { ...config, ...strategyConfig };
 
     // Fetch registries
@@ -49,6 +55,13 @@ class HaCustomDashboardStrategy {
     // Generate specific view
     if (view.path === 'overview') {
       return window.HaCustomOverviewView.generate(hass, mergedConfig, registry);
+    } else if (view.path === 'settings') {
+      return window.HaCustomSettingsView.generate(hass, mergedConfig, registry);
+    } else if (view.path === 'statistics') {
+      return window.HaCustomStatisticsView.generate(hass, mergedConfig, registry);
+    } else if (view.path.startsWith('settings-area-')) {
+      const areaId = view.path.replace('settings-area-', '');
+      return window.HaCustomSettingsView.generateAreaSettings(areaId, hass, mergedConfig, registry);
     } else {
       // Room view
       return window.HaCustomRoomView.generate(view.path, hass, mergedConfig, registry);
@@ -76,26 +89,6 @@ class HaCustomDashboardStrategy {
   }
 
   /**
-   * Load strategy configuration from storage
-   * @param {Object} hass - Home Assistant object
-   * @returns {Object} Strategy config
-   */
-  static async loadConfig(hass) {
-    try {
-      const storageKey = 'ha_custom_dashboard_config';
-      const data = await hass.callWS({
-        type: 'frontend/get_user_data',
-        key: storageKey,
-      });
-
-      return data?.value || {};
-    } catch (error) {
-      console.warn('[Strategy] Could not load config, using defaults:', error);
-      return {};
-    }
-  }
-
-  /**
    * Generate all views
    * @param {Object} hass - Home Assistant object
    * @param {Object} config - Strategy config
@@ -108,6 +101,11 @@ class HaCustomDashboardStrategy {
     // Overview view
     views.push(window.HaCustomOverviewView.generate(hass, config, registry));
 
+    // Statistics view
+    if (window.HaCustomStatisticsView) {
+      views.push(window.HaCustomStatisticsView.generate(hass, config, registry));
+    }
+
     // Room views
     const { areas } = registry;
     for (const area of areas) {
@@ -118,6 +116,11 @@ class HaCustomDashboardStrategy {
 
       const roomView = window.HaCustomRoomView.generate(area.area_id, hass, config, registry);
       views.push(roomView);
+    }
+
+    // Settings view (always last)
+    if (window.HaCustomSettingsView) {
+      views.push(window.HaCustomSettingsView.generate(hass, config, registry));
     }
 
     return views;
@@ -138,4 +141,4 @@ customElements.define(
   }
 );
 
-console.info('[Strategy] Registered as ll-strategy-ha-custom-dashboard');
+console.info('[Strategy] Registered as ll-strategy-ha-custom-dashboard v1.1.0');
