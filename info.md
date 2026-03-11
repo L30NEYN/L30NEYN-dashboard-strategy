@@ -18,8 +18,8 @@ Diese Komponente wurde über HACS installiert.
 ### Nächste Schritte:
 
 1. **Input Helpers erstellen** (erforderlich)
-   - Siehe [Installation Guide](https://github.com/L30NEYN/ha-custom-dashboard-strategy/blob/main/INSTALLATION.md)
-   - YAML-Template: [input_helpers.yaml](https://github.com/L30NEYN/ha-custom-dashboard-strategy/blob/main/examples/input_helpers.yaml)
+   - Siehe [Installation Guide](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/INSTALLATION.md)
+   - YAML-Template: [input_helpers.yaml](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/examples/input_helpers.yaml)
 
 2. **Mushroom Cards installieren** (erforderlich)
    - HACS → Frontend → Mushroom Cards
@@ -36,6 +36,8 @@ strategy:
   type: custom:ll-strategy-l30neyn-dashboard
 ```
 
+**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
+
 ## 🎨 Konfiguration
 
 Navigiere zum **Einstellungen**-Tab im Dashboard für:
@@ -47,15 +49,16 @@ Navigiere zum **Einstellungen**-Tab im Dashboard für:
 
 ## 📚 Dokumentation
 
-- [Vollständige README](https://github.com/L30NEYN/ha-custom-dashboard-strategy)
-- [Installations-Guide](https://github.com/L30NEYN/ha-custom-dashboard-strategy/blob/main/INSTALLATION.md)
-- [Konfigurations-Guide](https://github.com/L30NEYN/ha-custom-dashboard-strategy/blob/main/CONFIGURATION.md)
-- [Changelog](https://github.com/L30NEYN/ha-custom-dashboard-strategy/blob/main/CHANGELOG.md)
+- [Vollständige README](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
+- [Installations-Guide](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/INSTALLATION.md)
+- [HACS-Setup](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/docs/HACS_SETUP.md)
+- [Konfigurations-Guide](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/CONFIGURATION.md)
+- [Changelog](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/CHANGELOG.md)
 
 ## 🐛 Issues & Support
 
-- [GitHub Issues](https://github.com/L30NEYN/ha-custom-dashboard-strategy/issues)
-- [Discussions](https://github.com/L30NEYN/ha-custom-dashboard-strategy/discussions)
+- [GitHub Issues](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
+- [Discussions](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/discussions)
 
 ## ⭐ Support the Project
 
