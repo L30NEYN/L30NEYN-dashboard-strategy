@@ -1,29 +1,29 @@
 /**
- * HA Custom Dashboard Strategy
+ * L30NEYN Dashboard Strategy
  * 
- * A modular, performant Home Assistant dashboard strategy.
+ * A modular, performant Home Assistant dashboard strategy by L30NEYN.
  * Automatically generates overview and room views with grouped entity controls.
  * Now with settings panel, theme management, and statistics.
  * 
- * @author Leon Heyn
+ * @author L30NEYN (Leon Heyn)
  * @version 1.1.0
  * @license MIT
  */
 
-class HaCustomDashboardStrategy {
+class L30NEYNDashboardStrategy {
   static async generateDashboard(info) {
-    console.info('[Strategy] Generating dashboard...');
+    console.info('[L30NEYN Strategy] Generating dashboard...');
     const startTime = performance.now();
 
     const { hass, config } = info;
 
     // Load strategy config from config manager
-    const strategyConfig = await window.HaCustomConfigManager.loadConfig(hass);
+    const strategyConfig = await window.L30NEYNConfigManager.loadConfig(hass);
     const mergedConfig = { ...config, ...strategyConfig };
 
     // Apply theme
-    if (window.HaCustomThemeManager) {
-      window.HaCustomThemeManager.applyTheme(hass, mergedConfig);
+    if (window.L30NEYNThemeManager) {
+      window.L30NEYNThemeManager.applyTheme(hass, mergedConfig);
     }
 
     // Fetch registries
@@ -33,7 +33,7 @@ class HaCustomDashboardStrategy {
     const views = await this.generateViews(hass, mergedConfig, registry);
 
     const endTime = performance.now();
-    console.info(`[Strategy] Dashboard generated in ${(endTime - startTime).toFixed(2)}ms`);
+    console.info(`[L30NEYN Strategy] Dashboard generated in ${(endTime - startTime).toFixed(2)}ms`);
 
     return {
       views: views,
@@ -41,12 +41,12 @@ class HaCustomDashboardStrategy {
   }
 
   static async generateView(info) {
-    console.info('[Strategy] Generating view:', info.view.path);
+    console.info('[L30NEYN Strategy] Generating view:', info.view.path);
 
     const { hass, config, view } = info;
 
     // Load strategy config
-    const strategyConfig = await window.HaCustomConfigManager.loadConfig(hass);
+    const strategyConfig = await window.L30NEYNConfigManager.loadConfig(hass);
     const mergedConfig = { ...config, ...strategyConfig };
 
     // Fetch registries
@@ -54,17 +54,17 @@ class HaCustomDashboardStrategy {
 
     // Generate specific view
     if (view.path === 'overview') {
-      return window.HaCustomOverviewView.generate(hass, mergedConfig, registry);
+      return window.L30NEYNOverviewView.generate(hass, mergedConfig, registry);
     } else if (view.path === 'settings') {
-      return window.HaCustomSettingsView.generate(hass, mergedConfig, registry);
+      return window.L30NEYNSettingsView.generate(hass, mergedConfig, registry);
     } else if (view.path === 'statistics') {
-      return window.HaCustomStatisticsView.generate(hass, mergedConfig, registry);
+      return window.L30NEYNStatisticsView.generate(hass, mergedConfig, registry);
     } else if (view.path.startsWith('settings-area-')) {
       const areaId = view.path.replace('settings-area-', '');
-      return window.HaCustomSettingsView.generateAreaSettings(areaId, hass, mergedConfig, registry);
+      return window.L30NEYNSettingsView.generateAreaSettings(areaId, hass, mergedConfig, registry);
     } else {
       // Room view
-      return window.HaCustomRoomView.generate(view.path, hass, mergedConfig, registry);
+      return window.L30NEYNRoomView.generate(view.path, hass, mergedConfig, registry);
     }
   }
 
@@ -83,7 +83,7 @@ class HaCustomDashboardStrategy {
 
       return { entities, devices, areas };
     } catch (error) {
-      console.error('[Strategy] Failed to fetch registries:', error);
+      console.error('[L30NEYN Strategy] Failed to fetch registries:', error);
       return { entities: [], devices: [], areas: [] };
     }
   }
@@ -99,11 +99,11 @@ class HaCustomDashboardStrategy {
     const views = [];
 
     // Overview view
-    views.push(window.HaCustomOverviewView.generate(hass, config, registry));
+    views.push(window.L30NEYNOverviewView.generate(hass, config, registry));
 
     // Statistics view
-    if (window.HaCustomStatisticsView) {
-      views.push(window.HaCustomStatisticsView.generate(hass, config, registry));
+    if (window.L30NEYNStatisticsView) {
+      views.push(window.L30NEYNStatisticsView.generate(hass, config, registry));
     }
 
     // Room views
@@ -114,31 +114,35 @@ class HaCustomDashboardStrategy {
         continue;
       }
 
-      const roomView = window.HaCustomRoomView.generate(area.area_id, hass, config, registry);
+      const roomView = window.L30NEYNRoomView.generate(area.area_id, hass, config, registry);
       views.push(roomView);
     }
 
     // Settings view (always last)
-    if (window.HaCustomSettingsView) {
-      views.push(window.HaCustomSettingsView.generate(hass, config, registry));
+    if (window.L30NEYNSettingsView) {
+      views.push(window.L30NEYNSettingsView.generate(hass, config, registry));
     }
 
     return views;
   }
 }
 
-// Register strategy
+// Register strategy with L30NEYN naming
 customElements.define(
-  'll-strategy-ha-custom-dashboard',
+  'll-strategy-l30neyn-dashboard',
   class extends HTMLElement {
     static async generate(info) {
-      return HaCustomDashboardStrategy.generateDashboard(info);
+      return L30NEYNDashboardStrategy.generateDashboard(info);
     }
 
     static async generateView(info) {
-      return HaCustomDashboardStrategy.generateView(info);
+      return L30NEYNDashboardStrategy.generateView(info);
     }
   }
 );
 
-console.info('[Strategy] Registered as ll-strategy-ha-custom-dashboard v1.1.0');
+console.info(
+  '%c L30NEYN-DASHBOARD-STRATEGY %c v1.1.0 ',
+  'background: #41BDF5; color: #fff; font-weight: bold; padding: 3px 5px;',
+  'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;'
+);
