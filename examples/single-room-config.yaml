@@ -1,0 +1,27 @@
+# Beispiel: Einzelner Raum konfiguriert
+# Alle anderen Räume verwenden Standardeinstellungen
+
+strategy:
+  type: custom:ll-strategy-ha-custom-dashboard
+  
+  # Nur Wohnzimmer konfigurieren
+  areas_options:
+    wohnzimmer:
+      groups_options:
+        light:
+          # Verstecke TV-Licht
+          hidden:
+            - light.tv_hintergrundbeleuchtung
+          
+          # Hauptlicht zuerst, dann alphabetisch
+          order:
+            - light.deckenlampe
+            - light.stehlampe
+        
+        cover:
+          # Rollos in logischer Reihenfolge
+          order:
+            - cover.fenster_sued
+            - cover.fenster_west
+
+views: []

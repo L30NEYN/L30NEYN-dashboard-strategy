@@ -1,0 +1,6 @@
+# Minimale Konfiguration
+# Generiert automatisch alle Ansichten
+
+strategy:
+  type: custom:ll-strategy-ha-custom-dashboard
+views: []

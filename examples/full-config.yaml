@@ -1,0 +1,138 @@
+# Vollständige Beispiel-Konfiguration
+# Zeigt alle verfügbaren Optionen
+
+strategy:
+  type: custom:ll-strategy-ha-custom-dashboard
+  
+  # === Übersichtsseite ===
+  title: "Smart Home"
+  icon: "mdi:home-assistant"
+  
+  # Elemente ein-/ausblenden
+  show_welcome: true           # Begrüßungsnachricht anzeigen
+  show_areas: true             # Raum-Karten anzeigen
+  show_security: true          # Sicherheitsstatus anzeigen
+  show_light_summary: true     # Licht-Zusammenfassung anzeigen
+  show_battery_status: true    # Batterie-Status anzeigen
+  
+  # Wetter-Entität (optional, automatische Erkennung)
+  weather_entity: weather.forecast_home
+  
+  # === Raum-spezifische Optionen ===
+  areas_options:
+    
+    # --- Wohnzimmer ---
+    wohnzimmer:
+      groups_options:
+        # Lichter
+        light:
+          hidden:
+            - light.tv_hintergrundbeleuchtung
+            - light.verstecktes_ambientelicht
+          order:
+            - light.deckenlampe
+            - light.stehlampe_rechts
+            - light.stehlampe_links
+            - light.leseleuchte
+        
+        # Rollos
+        cover:
+          hidden: []
+          order:
+            - cover.fenster_sued
+            - cover.fenster_west
+            - cover.terrassentuer
+        
+        # Sensoren
+        sensor:
+          hidden:
+            - sensor.wohnzimmer_debug
+          order: []
+    
+    # --- Schlafzimmer ---
+    schlafzimmer:
+      groups_options:
+        light:
+          hidden: []
+          order:
+            - light.deckenlampe
+            - light.nachttischlampe_links
+            - light.nachttischlampe_rechts
+            - light.kleiderschrank_licht
+        
+        cover:
+          order:
+            - cover.rollo_fenster_ost
+            - cover.rollo_fenster_nord
+        
+        climate:
+          order:
+            - climate.heizung_schlafzimmer
+    
+    # --- Küche ---
+    kueche:
+      groups_options:
+        light:
+          hidden:
+            - light.dunstabzug_licht  # Teil des Dunstabzugs
+          order:
+            - light.deckenspots
+            - light.unterschrankbeleuchtung
+            - light.vitrinenbeleuchtung
+        
+        switch:
+          order:
+            - switch.kaffeemaschine
+            - switch.wasserkocher
+    
+    # --- Badezimmer ---
+    badezimmer:
+      groups_options:
+        light:
+          order:
+            - light.deckenlampe
+            - light.spiegelbeleuchtung
+        
+        climate:
+          order:
+            - climate.heizung_badezimmer
+        
+        sensor:
+          order:
+            - sensor.badezimmer_temperatur
+            - sensor.badezimmer_luftfeuchtigkeit
+    
+    # --- Arbeitszimmer ---
+    arbeitszimmer:
+      groups_options:
+        light:
+          order:
+            - light.schreibtischlampe
+            - light.deckenlampe
+        
+        switch:
+          order:
+            - switch.monitor_power
+            - switch.drucker
+        
+        sensor:
+          hidden:
+            - sensor.arbeitszimmer_co2_kalibrierung
+          order:
+            - sensor.arbeitszimmer_temperatur
+            - sensor.arbeitszimmer_co2
+    
+    # --- Flur ---
+    flur:
+      groups_options:
+        light:
+          order:
+            - light.deckenlampe
+            - light.garderobe
+        
+        binary_sensor:
+          order:
+            - binary_sensor.bewegungsmelder_flur
+            - binary_sensor.haustuer
+
+views: []
