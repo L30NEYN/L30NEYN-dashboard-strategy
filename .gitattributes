@@ -1,0 +1,11 @@
+# JavaScript as primary language
+*.js linguist-language=JavaScript
+*.json linguist-language=JSON
+
+# Documentation
+*.md linguist-documentation
+*.yaml linguist-documentation
+*.yml linguist-documentation
+
+# Build files
+build.py linguist-generated=false
