@@ -7,7 +7,7 @@
  * @author L30NEYN (Leon Heyn)
  * @version 1.1.0
  * @license MIT
- * @see https://github.com/L30NEYN/ha-custom-dashboard-strategy
+ * @see https://github.com/L30NEYN/L30NEYN-dashboard-strategy
  */
 
 (function() {
@@ -15,7 +15,7 @@
 
   // Version and configuration
   const VERSION = '1.1.0';
-  const STRATEGY_NAME = 'll-strategy-l30neyn-dashboard';
+  const STRATEGY_NAME = 'l30neyn-dashboard'; // HA adds 'll-strategy-' prefix automatically
   const BASE_PATH = '/hacsfiles/l30neyn-dashboard-strategy';
   
   // Display load banner
