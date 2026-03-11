@@ -1,9 +1,9 @@
 # L30NEYN Dashboard Strategy
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/L30NEYN/ha-custom-dashboard-strategy.svg)](https://github.com/L30NEYN/ha-custom-dashboard-strategy/releases)
-[![License](https://img.shields.io/github/license/L30NEYN/ha-custom-dashboard-strategy.svg)](LICENSE)
-[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/L30NEYN/ha-custom-dashboard-strategy)
+[![GitHub Release](https://img.shields.io/github/release/L30NEYN/L30NEYN-dashboard-strategy.svg)](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases)
+[![License](https://img.shields.io/github/license/L30NEYN/L30NEYN-dashboard-strategy.svg)](LICENSE)
+[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
 
 Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mit automatischer Raumerkennung, Theme-System und Statistiken.
 
@@ -45,7 +45,7 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 3. Klicke auf das **⋮ Menü** (drei Punkte oben rechts)
 4. Wähle **Benutzerdefinierte Repositories**
 5. Füge hinzu:
-   - **Repository**: `https://github.com/L30NEYN/ha-custom-dashboard-strategy`
+   - **Repository**: `https://github.com/L30NEYN/L30NEYN-dashboard-strategy`
    - **Kategorie**: **Lovelace**
 6. Klicke **Hinzufügen**
 
@@ -69,11 +69,11 @@ mkdir -p /config/www/l30neyn-dashboard-strategy
 cd /config/www/l30neyn-dashboard-strategy
 
 # Haupt-Datei
-wget https://raw.githubusercontent.com/L30NEYN/ha-custom-dashboard-strategy/main/l30neyn-dashboard-strategy.js
+wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/l30neyn-dashboard-strategy.js
 
 # Alle Module (benötigt!)
 wget -r -np -nH --cut-dirs=3 -R "index.html*" \
-  https://raw.githubusercontent.com/L30NEYN/ha-custom-dashboard-strategy/main/dist/
+  https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/dist/
 ```
 
 #### 2. Ressource registrieren
@@ -136,6 +136,8 @@ title: L30NEYN Dashboard
 strategy:
   type: custom:ll-strategy-l30neyn-dashboard
 ```
+
+**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
 
 ## 🎨 Konfiguration
 
@@ -270,7 +272,7 @@ sensor:
 ### Repository-Struktur
 
 ```
-L30NEYN/ha-custom-dashboard-strategy/
+L30NEYN/L30NEYN-dashboard-strategy/
 ├── l30neyn-dashboard-strategy.js         # HACS Entry Point
 ├── dist/
 │   ├── strategy.js                     # Haupt-Strategy
@@ -319,6 +321,10 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 - 🔄 Auto-Theme-Synchronisierung
 - 📦 HACS-kompatible Struktur
 
+**Fixes:**
+- 🔧 Strategy-Registrierung korrigiert
+- 🔗 Repository-Referenzen aktualisiert
+
 **Performance:**
 - 42% schnellere Dashboard-Generierung
 - 33% schnellere View-Generierung
@@ -343,7 +349,7 @@ Vollständige Lizenz: [LICENSE](LICENSE)
 
 **L30NEYN** (Leon Heyn)
 - GitHub: [@L30NEYN](https://github.com/L30NEYN)
-- Repository: [ha-custom-dashboard-strategy](https://github.com/L30NEYN/ha-custom-dashboard-strategy)
+- Repository: [L30NEYN-dashboard-strategy](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
 
 ## 🙏 Credits
 
@@ -357,8 +363,8 @@ Vollständige Lizenz: [LICENSE](LICENSE)
 - **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
 - **Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
 - **Update-Guide**: [docs/UPDATE.md](docs/UPDATE.md)
-- **Issues**: [GitHub Issues](https://github.com/L30NEYN/ha-custom-dashboard-strategy/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/L30NEYN/ha-custom-dashboard-strategy/discussions)
+- **Issues**: [GitHub Issues](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/discussions)
 
 ## ⭐ Support
 
