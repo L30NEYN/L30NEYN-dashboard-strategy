@@ -18,7 +18,7 @@ Da diese Strategy noch nicht im HACS-Default-Repository ist:
 3. Klicke auf das **⋮ Menü** (drei Punkte oben rechts)
 4. Wähle **Benutzerdefinierte Repositories**
 5. Füge hinzu:
-   - **Repository**: `https://github.com/L30NEYN/ha-custom-dashboard-strategy`
+   - **Repository**: `https://github.com/L30NEYN/L30NEYN-dashboard-strategy`
    - **Kategorie**: **Lovelace** (wichtig!)
 6. Klicke **Hinzufügen**
 
@@ -99,6 +99,8 @@ strategy:
   type: custom:ll-strategy-l30neyn-dashboard
 ```
 
+**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
+
 10. Klicke **Speichern**
 11. Klicke **Fertig**
 
@@ -111,8 +113,8 @@ Prüfe ob alles funktioniert:
 3. **Einstellungen verfügbar**: "Einstellungen"-Tab im Menü
 4. **Browser Console** (F12): Sollte zeigen:
    ```
-   L30NEYN-DASHBOARD v1.1.0
-   L30NEYN-DASHBOARD Ready!
+   L30NEYN-DASHBOARD-STRATEGY v1.1.0
+   [L30NEYN Strategy] Dashboard generated in XXms
    ```
 
 ## 🔧 Troubleshooting
@@ -128,6 +130,7 @@ Prüfe ob alles funktioniert:
    - **"Strategy not found"**: Cache-Refresh (Strg+Shift+R)
    - **"Mushroom not found"**: Mushroom Cards installieren
    - **404-Fehler**: HACS-Installation prüfen
+   - **"Timeout waiting for strategy element"**: Strategy-Typ prüfen (muss `custom:ll-strategy-l30neyn-dashboard` sein)
 
 ### Input Helpers fehlen
 
@@ -157,6 +160,16 @@ Prüfe ob alles funktioniert:
 - **Klima**: Temperatur/Feuchtigkeits-Sensoren Areas zuweisen
 - **System**: System Monitor Integration aktivieren
 
+### Strategy-Registrierungsfehler
+
+**Problem**: `Timeout waiting for strategy element ll-strategy-dashboard-ll-strategy-l30neyn-dashboard`
+
+**Lösung**:
+1. Prüfe den `type` in der Dashboard-Konfiguration
+2. Muss **exakt** sein: `custom:ll-strategy-l30neyn-dashboard`
+3. **Nicht** `custom:ll-strategy-dashboard-l30neyn` oder andere Varianten
+4. Cache-Refresh (Strg+Shift+R)
+
 ## 🔄 Updates
 
 ### Via HACS
@@ -174,7 +187,7 @@ Prüfe ob alles funktioniert:
 cat version.json
 ```
 
-Vergleiche mit [GitHub Releases](https://github.com/L30NEYN/ha-custom-dashboard-strategy/releases).
+Vergleiche mit [GitHub Releases](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases).
 
 ## 📚 Weiterführende Dokumentation
 
@@ -187,7 +200,7 @@ Vergleiche mit [GitHub Releases](https://github.com/L30NEYN/ha-custom-dashboard-
 
 Bei Problemen:
 1. Prüfe die [Troubleshooting-Sektion](#-troubleshooting)
-2. Durchsuche [GitHub Issues](https://github.com/L30NEYN/ha-custom-dashboard-strategy/issues)
+2. Durchsuche [GitHub Issues](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
 3. Erstelle ein neues Issue mit:
    - Home Assistant Version
    - Browser + Version
