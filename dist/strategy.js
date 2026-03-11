@@ -127,10 +127,11 @@ class L30NEYNDashboardStrategy {
   }
 }
 
-// Register strategy - HA automatically adds 'll-strategy-' prefix
-// So 'l30neyn-dashboard' becomes 'll-strategy-l30neyn-dashboard'
+// Register Dashboard Strategy
+// IMPORTANT: Dashboard strategies need the FULL 'll-strategy-' prefix
+// HA does NOT add it automatically for dashboard strategies!
 customElements.define(
-  'l30neyn-dashboard',
+  'll-strategy-l30neyn-dashboard',
   class extends HTMLElement {
     static async generate(info) {
       return L30NEYNDashboardStrategy.generateDashboard(info);
