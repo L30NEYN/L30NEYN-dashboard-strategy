@@ -38,12 +38,26 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 
 ### Via HACS (Empfohlen)
 
-1. Öffne HACS in Home Assistant
-2. Gehe zu **Frontend**
-3. Klicke auf das **+** Symbol
-4. Suche nach **"L30NEYN Dashboard Strategy"**
-5. Klicke **Installieren**
-6. Starte Home Assistant neu
+#### Schritt 1: Custom Repository hinzufügen
+
+1. Öffne **HACS** in Home Assistant
+2. Klicke auf **Frontend** (nicht Integrationen!)
+3. Klicke auf das **⋮ Menü** (drei Punkte oben rechts)
+4. Wähle **Benutzerdefinierte Repositories**
+5. Füge hinzu:
+   - **Repository**: `https://github.com/L30NEYN/ha-custom-dashboard-strategy`
+   - **Kategorie**: **Lovelace**
+6. Klicke **Hinzufügen**
+
+#### Schritt 2: Installieren
+
+1. Suche in HACS nach **"L30NEYN Dashboard Strategy"**
+2. Klicke auf die Karte
+3. Klicke **Installieren**
+4. Bestätige die Installation
+5. **Kein Neustart nötig** – nur Frontend-Dateien
+
+> 📚 **Detaillierte HACS-Anleitung**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
 
 ### Manuell
 
@@ -51,8 +65,15 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 
 ```bash
 # In dein Home Assistant config-Verzeichnis
-wget -O /config/www/l30neyn-dashboard-strategy.js \
-  https://raw.githubusercontent.com/L30NEYN/ha-custom-dashboard-strategy/main/dist/l30neyn-dashboard-strategy.js
+mkdir -p /config/www/l30neyn-dashboard-strategy
+cd /config/www/l30neyn-dashboard-strategy
+
+# Haupt-Datei
+wget https://raw.githubusercontent.com/L30NEYN/ha-custom-dashboard-strategy/main/l30neyn-dashboard-strategy.js
+
+# Alle Module (benötigt!)
+wget -r -np -nH --cut-dirs=3 -R "index.html*" \
+  https://raw.githubusercontent.com/L30NEYN/ha-custom-dashboard-strategy/main/dist/
 ```
 
 #### 2. Ressource registrieren
@@ -60,19 +81,24 @@ wget -O /config/www/l30neyn-dashboard-strategy.js \
 **Einstellungen → Dashboards → Ressourcen → Ressource hinzufügen:**
 
 ```yaml
-URL: /local/l30neyn-dashboard-strategy.js
+URL: /local/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
 Typ: JavaScript-Modul
 ```
 
-### 3. Input Helpers erstellen
+## ⚙️ Setup
+
+### 1. Input Helpers erstellen (Erforderlich)
 
 **Option A: Via configuration.yaml (empfohlen)**
 
-Kopiere den Inhalt von [`examples/input_helpers.yaml`](examples/input_helpers.yaml) in deine `configuration.yaml`.
+Kopiere den Inhalt von [`examples/input_helpers.yaml`](examples/input_helpers.yaml) in deine `configuration.yaml` und starte HA neu.
 
 **Option B: Via UI**
 
 Gehe zu **Einstellungen → Geräte & Dienste → Helfer** und erstelle:
+
+<details>
+<summary><b>Input Helpers (klicken zum Ausklappen)</b></summary>
 
 **Input Booleans:**
 - `input_boolean.l30neyn_show_welcome`
@@ -87,13 +113,21 @@ Gehe zu **Einstellungen → Geräte & Dienste → Helfer** und erstelle:
 - `input_boolean.l30neyn_debug_mode`
 
 **Input Selects:**
-- `input_select.l30neyn_theme_mode` (Optionen: light, dark, auto)
-- `input_select.l30neyn_color_scheme` (Optionen: default, blue, green, purple, orange, red)
+- `input_select.l30neyn_theme_mode` (Optionen: `light`, `dark`, `auto`)
+- `input_select.l30neyn_color_scheme` (Optionen: `default`, `blue`, `green`, `purple`, `orange`, `red`)
 
 **Input Text:**
-- `input_text.l30neyn_weather_entity`
+- `input_text.l30neyn_weather_entity` (leer lassen für Auto-Erkennung)
 
-### 4. Dashboard erstellen
+</details>
+
+### 2. Mushroom Cards installieren (Erforderlich)
+
+**HACS → Frontend → Mushroom Cards installieren**
+
+Diese Strategie benötigt Mushroom Cards für die UI.
+
+### 3. Dashboard erstellen
 
 **Einstellungen → Dashboards → Dashboard hinzufügen:**
 
@@ -102,12 +136,6 @@ title: L30NEYN Dashboard
 strategy:
   type: custom:ll-strategy-l30neyn-dashboard
 ```
-
-### 5. Mushroom Cards installieren
-
-**HACS → Frontend → Mushroom Cards installieren**
-
-Diese Strategie benötigt Mushroom Cards für die UI.
 
 ## 🎨 Konfiguration
 
@@ -159,6 +187,8 @@ strategy:
     show_network_stats: false
     weather_entity: weather.home
 ```
+
+> 📚 **Erweiterte Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
 
 ## 🏷️ Labels verwenden
 
@@ -241,17 +271,17 @@ sensor:
 
 ```
 L30NEYN/ha-custom-dashboard-strategy/
+├── l30neyn-dashboard-strategy.js         # HACS Entry Point
 ├── dist/
-│   ├── l30neyn-dashboard-strategy.js  # Gebündelte Version
 │   ├── strategy.js                     # Haupt-Strategy
 │   ├── views/                          # View-Generatoren
 │   └── utils/                          # Utilities
 ├── examples/
 │   └── input_helpers.yaml              # Config-Template
 ├── docs/
+│   ├── HACS_SETUP.md                   # HACS-Anleitung
 │   ├── INSTALLATION.md                 # Install-Guide
-│   ├── UPDATE.md                       # Update-Guide
-│   └── HACS_SUBMISSION.md              # HACS-Guide
+│   └── UPDATE.md                       # Update-Guide
 ├── build.py                            # Build-Script
 ├── hacs.json                           # HACS-Config
 └── info.md                             # HACS-Info
@@ -287,6 +317,7 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 - 📊 Statistik-Dashboard (Energie/Klima/System/Netzwerk)
 - ⚙️ Config-Manager mit Input-Helper-Integration
 - 🔄 Auto-Theme-Synchronisierung
+- 📦 HACS-kompatible Struktur
 
 **Performance:**
 - 42% schnellere Dashboard-Generierung
@@ -322,10 +353,10 @@ Vollständige Lizenz: [LICENSE](LICENSE)
 
 ## 🔗 Links
 
-- **Dokumentation**: [docs/](docs/)
+- **HACS-Setup**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
 - **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- **Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
 - **Update-Guide**: [docs/UPDATE.md](docs/UPDATE.md)
-- **HACS-Submission**: [docs/HACS_SUBMISSION.md](docs/HACS_SUBMISSION.md)
 - **Issues**: [GitHub Issues](https://github.com/L30NEYN/ha-custom-dashboard-strategy/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/L30NEYN/ha-custom-dashboard-strategy/discussions)
 
