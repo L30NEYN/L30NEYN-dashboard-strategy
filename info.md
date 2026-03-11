@@ -26,17 +26,17 @@ Diese Komponente wurde über HACS installiert.
 
 3. **Dashboard erstellen**
    - Einstellungen → Dashboards → Dashboard hinzufügen
-   - Strategy: `custom:ll-strategy-l30neyn-dashboard`
+   - Strategy: `custom:l30neyn`
 
 ### Dashboard-Konfiguration:
 
 ```yaml
 title: L30NEYN Dashboard
 strategy:
-  type: custom:ll-strategy-l30neyn-dashboard
+  type: custom:l30neyn
 ```
 
-**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
+**Wichtig:** Der `type` ist `custom:l30neyn` (OHNE `ll-strategy-` Prefix - HA fügt das automatisch hinzu!)
 
 ## 🎨 Konfiguration
 
