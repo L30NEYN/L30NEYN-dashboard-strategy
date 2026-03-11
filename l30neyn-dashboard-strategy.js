@@ -15,7 +15,7 @@
 
   // Version and configuration
   const VERSION = '1.1.0';
-  const STRATEGY_NAME = 'l30neyn-dashboard'; // HA adds 'll-strategy-' prefix automatically
+  const STRATEGY_NAME = 'll-strategy-l30neyn-dashboard'; // Full name with prefix (dashboard strategies)
   const BASE_PATH = '/hacsfiles/l30neyn-dashboard-strategy';
   
   // Display load banner
