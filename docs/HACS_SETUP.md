@@ -96,10 +96,10 @@ Erstelle manuell über **Einstellungen → Geräte & Dienste → Helfer**:
 ```yaml
 title: L30NEYN Dashboard
 strategy:
-  type: custom:ll-strategy-l30neyn-dashboard
+  type: custom:l30neyn
 ```
 
-**Wichtig:** Der `type` muss **exakt** `custom:ll-strategy-l30neyn-dashboard` sein!
+**Wichtig:** Der `type` muss **exakt** `custom:l30neyn` sein (OHNE `ll-strategy-` Prefix)!
 
 10. Klicke **Speichern**
 11. Klicke **Fertig**
@@ -130,7 +130,30 @@ Prüfe ob alles funktioniert:
    - **"Strategy not found"**: Cache-Refresh (Strg+Shift+R)
    - **"Mushroom not found"**: Mushroom Cards installieren
    - **404-Fehler**: HACS-Installation prüfen
-   - **"Timeout waiting for strategy element"**: Strategy-Typ prüfen (muss `custom:ll-strategy-l30neyn-dashboard` sein)
+   - **"Timeout waiting for strategy element"**: Strategy-Typ prüfen (muss `custom:l30neyn` sein - OHNE `ll-strategy-` Prefix!)
+
+### Falscher Strategy Type
+
+**Problem**: `Error: Timeout waiting for strategy element ll-strategy-dashboard-ll-strategy-l30neyn`
+
+**Ursache**: Falscher Type in Dashboard-Konfiguration
+
+**Lösung**:
+```yaml
+# ❌ FALSCH (doppeltes Prefix):
+strategy:
+  type: custom:ll-strategy-l30neyn
+
+# ❌ FALSCH (mit -dashboard):
+strategy:
+  type: custom:l30neyn-dashboard
+
+# ✅ RICHTIG:
+strategy:
+  type: custom:l30neyn
+```
+
+Home Assistant fügt automatisch `ll-strategy-` zum Type hinzu!
 
 ### Input Helpers fehlen
 
@@ -159,16 +182,6 @@ Prüfe ob alles funktioniert:
 - **Energie**: Energie-Dashboard konfigurieren
 - **Klima**: Temperatur/Feuchtigkeits-Sensoren Areas zuweisen
 - **System**: System Monitor Integration aktivieren
-
-### Strategy-Registrierungsfehler
-
-**Problem**: `Timeout waiting for strategy element ll-strategy-dashboard-ll-strategy-l30neyn-dashboard`
-
-**Lösung**:
-1. Prüfe den `type` in der Dashboard-Konfiguration
-2. Muss **exakt** sein: `custom:ll-strategy-l30neyn-dashboard`
-3. **Nicht** `custom:ll-strategy-dashboard-l30neyn` oder andere Varianten
-4. Cache-Refresh (Strg+Shift+R)
 
 ## 🔄 Updates
 
