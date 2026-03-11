@@ -128,10 +128,11 @@ class L30NEYNDashboardStrategy {
 }
 
 // Register Dashboard Strategy
-// IMPORTANT: Dashboard strategies need the FULL 'll-strategy-' prefix
-// HA does NOT add it automatically for dashboard strategies!
+// Element name: ll-strategy-l30neyn
+// Usage in YAML: type: custom:l30neyn
+// HA automatically adds 'll-strategy-' prefix to the type!
 customElements.define(
-  'll-strategy-l30neyn-dashboard',
+  'll-strategy-l30neyn',
   class extends HTMLElement {
     static async generate(info) {
       return L30NEYNDashboardStrategy.generateDashboard(info);
