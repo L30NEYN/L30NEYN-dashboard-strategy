@@ -127,9 +127,10 @@ class L30NEYNDashboardStrategy {
   }
 }
 
-// Register strategy with L30NEYN naming
+// Register strategy - HA automatically adds 'll-strategy-' prefix
+// So 'l30neyn-dashboard' becomes 'll-strategy-l30neyn-dashboard'
 customElements.define(
-  'll-strategy-l30neyn-dashboard',
+  'l30neyn-dashboard',
   class extends HTMLElement {
     static async generate(info) {
       return L30NEYNDashboardStrategy.generateDashboard(info);
