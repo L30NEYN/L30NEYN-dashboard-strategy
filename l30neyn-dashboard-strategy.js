@@ -4,7 +4,7 @@
  * A modular, performant Home Assistant dashboard strategy by L30NEYN.
  * Features: Auto room detection, theme system, statistics, and settings panel.
  * 
- * @author L30NEYN (Leon Heyn)
+ * @author L30NEYN
  * @version 1.1.0
  * @license MIT
  * @see https://github.com/L30NEYN/L30NEYN-dashboard-strategy
