@@ -1,0 +1,173 @@
+/**
+ * HA Custom Dashboard Strategy - Theme System
+ * 
+ * Provides theme support with light/dark modes and custom color schemes.
+ * Uses CSS custom properties for dynamic theming.
+ * 
+ * @version 1.1.0
+ */
+
+:root {
+  /* === Base Theme Variables === */
+  
+  /* Primary Colors */
+  --ha-custom-primary: var(--primary-color, #03a9f4);
+  --ha-custom-primary-light: var(--light-primary-color, #4fc3f7);
+  --ha-custom-primary-dark: var(--dark-primary-color, #0288d1);
+  
+  /* Accent Colors */
+  --ha-custom-accent: var(--accent-color, #ff9800);
+  --ha-custom-accent-light: var(--light-accent-color, #ffb74d);
+  --ha-custom-accent-dark: var(--dark-accent-color, #f57c00);
+  
+  /* Background Colors */
+  --ha-custom-bg-primary: var(--primary-background-color, #fafafa);
+  --ha-custom-bg-secondary: var(--secondary-background-color, #e0e0e0);
+  --ha-custom-bg-card: var(--card-background-color, #ffffff);
+  
+  /* Text Colors */
+  --ha-custom-text-primary: var(--primary-text-color, #212121);
+  --ha-custom-text-secondary: var(--secondary-text-color, #727272);
+  --ha-custom-text-disabled: var(--disabled-text-color, #bdbdbd);
+  
+  /* Border & Divider */
+  --ha-custom-divider: var(--divider-color, rgba(0, 0, 0, 0.12));
+  --ha-custom-border-radius: 8px;
+  
+  /* Shadows */
+  --ha-custom-shadow-small: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --ha-custom-shadow-medium: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --ha-custom-shadow-large: 0 8px 16px rgba(0, 0, 0, 0.2);
+  
+  /* Spacing */
+  --ha-custom-spacing-xs: 4px;
+  --ha-custom-spacing-sm: 8px;
+  --ha-custom-spacing-md: 16px;
+  --ha-custom-spacing-lg: 24px;
+  --ha-custom-spacing-xl: 32px;
+  
+  /* Status Colors */
+  --ha-custom-success: #4caf50;
+  --ha-custom-warning: #ff9800;
+  --ha-custom-error: #f44336;
+  --ha-custom-info: #2196f3;
+  
+  /* Entity States */
+  --ha-custom-state-on: var(--state-icon-active-color, #fdd835);
+  --ha-custom-state-off: var(--state-icon-color, #44739e);
+  --ha-custom-state-unavailable: var(--state-icon-unavailable-color, #bdbdbd);
+}
+
+/* === Dark Theme Overrides === */
+[data-theme="dark"],
+ha-card[data-theme="dark"] {
+  --ha-custom-bg-primary: #111111;
+  --ha-custom-bg-secondary: #1c1c1c;
+  --ha-custom-bg-card: #1e1e1e;
+  
+  --ha-custom-text-primary: #e1e1e1;
+  --ha-custom-text-secondary: #9e9e9e;
+  --ha-custom-text-disabled: #6f6f6f;
+  
+  --ha-custom-divider: rgba(255, 255, 255, 0.12);
+  
+  --ha-custom-shadow-small: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --ha-custom-shadow-medium: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --ha-custom-shadow-large: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* === Predefined Color Schemes === */
+
+/* Blue Theme */
+[data-color-scheme="blue"] {
+  --ha-custom-primary: #2196f3;
+  --ha-custom-primary-light: #64b5f6;
+  --ha-custom-primary-dark: #1976d2;
+  --ha-custom-accent: #ff9800;
+}
+
+/* Green Theme */
+[data-color-scheme="green"] {
+  --ha-custom-primary: #4caf50;
+  --ha-custom-primary-light: #81c784;
+  --ha-custom-primary-dark: #388e3c;
+  --ha-custom-accent: #ff5722;
+}
+
+/* Purple Theme */
+[data-color-scheme="purple"] {
+  --ha-custom-primary: #9c27b0;
+  --ha-custom-primary-light: #ba68c8;
+  --ha-custom-primary-dark: #7b1fa2;
+  --ha-custom-accent: #ffeb3b;
+}
+
+/* Red Theme */
+[data-color-scheme="red"] {
+  --ha-custom-primary: #f44336;
+  --ha-custom-primary-light: #e57373;
+  --ha-custom-primary-dark: #d32f2f;
+  --ha-custom-accent: #ffc107;
+}
+
+/* Orange Theme */
+[data-color-scheme="orange"] {
+  --ha-custom-primary: #ff9800;
+  --ha-custom-primary-light: #ffb74d;
+  --ha-custom-primary-dark: #f57c00;
+  --ha-custom-accent: #4caf50;
+}
+
+/* Teal Theme */
+[data-color-scheme="teal"] {
+  --ha-custom-primary: #009688;
+  --ha-custom-primary-light: #4db6ac;
+  --ha-custom-primary-dark: #00796b;
+  --ha-custom-accent: #ff5722;
+}
+
+/* === Utility Classes === */
+
+.ha-custom-card {
+  background-color: var(--ha-custom-bg-card);
+  border-radius: var(--ha-custom-border-radius);
+  box-shadow: var(--ha-custom-shadow-small);
+  padding: var(--ha-custom-spacing-md);
+  transition: box-shadow 0.3s ease;
+}
+
+.ha-custom-card:hover {
+  box-shadow: var(--ha-custom-shadow-medium);
+}
+
+.ha-custom-text-primary {
+  color: var(--ha-custom-text-primary);
+}
+
+.ha-custom-text-secondary {
+  color: var(--ha-custom-text-secondary);
+}
+
+.ha-custom-divider {
+  height: 1px;
+  background-color: var(--ha-custom-divider);
+  margin: var(--ha-custom-spacing-md) 0;
+}
+
+/* === Status Colors === */
+
+.ha-custom-status-success {
+  color: var(--ha-custom-success);
+}
+
+.ha-custom-status-warning {
+  color: var(--ha-custom-warning);
+}
+
+.ha-custom-status-error {
+  color: var(--ha-custom-error);
+}
+
+.ha-custom-status-info {
+  color: var(--ha-custom-info);
+}
