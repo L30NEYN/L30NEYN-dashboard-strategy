@@ -324,6 +324,7 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 **Fixes:**
 - 🔧 Strategy-Registrierung korrigiert (`custom:l30neyn`)
 - 🔗 Repository-Referenzen aktualisiert
+- 📦 HACS dist/-Ordner wird nun korrekt installiert
 
 **Performance:**
 - 42% schnellere Dashboard-Generierung
@@ -341,13 +342,13 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## 📄 Lizenz
 
-MIT License - Copyright (c) 2026 L30NEYN (Leon Heyn)
+MIT License - Copyright (c) 2026 L30NEYN
 
 Vollständige Lizenz: [LICENSE](LICENSE)
 
 ## 👤 Autor
 
-**L30NEYN** (Leon Heyn)
+**L30NEYN**
 - GitHub: [@L30NEYN](https://github.com/L30NEYN)
 - Repository: [L30NEYN-dashboard-strategy](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
 
