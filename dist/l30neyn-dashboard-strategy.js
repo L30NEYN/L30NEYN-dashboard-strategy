@@ -1,5 +1,5 @@
 /**
- * L30NEYN Dashboard Strategy
+ * L30NEYN Dashboard Strategy - Main Loader
  * 
  * A modular, performant Home Assistant dashboard strategy by L30NEYN.
  * Features: Auto room detection, theme system, statistics, and settings panel.
@@ -10,109 +10,32 @@
  * @see https://github.com/L30NEYN/L30NEYN-dashboard-strategy
  */
 
-(function() {
-  'use strict';
+// Display load banner
+console.info(
+  '%c L30NEYN-DASHBOARD %c v1.1.0 ',
+  'background: #41BDF5; color: #fff; font-weight: bold; padding: 3px 5px;',
+  'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;'
+);
 
-  // Version and configuration
-  const VERSION = '1.1.0';
-  const STRATEGY_NAME = 'll-strategy-l30neyn'; // Strategy element name
-  const BASE_PATH = '/local/community/L30NEYN-Dashboard-Strategy'; // HACS install path (matches repo name with CAPS)
-  
-  // Display load banner
-  console.info(
-    '%c L30NEYN-DASHBOARD %c v' + VERSION + ' ',
-    'background: #41BDF5; color: #fff; font-weight: bold; padding: 3px 5px;',
-    'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;'
-  );
+// Load utilities first (dependencies)
+import './utils/entity-filter.js';
+import './utils/card-builders.js';
+import './utils/statistics-collectors.js';
+import './utils/statistics-card-builders.js';
+import './utils/theme-manager.js';
+import './utils/config-manager.js';
 
-  // Module loading order (critical for dependencies)
-  const modules = [
-    // Core utilities first
-    'utils/entity-filter.js',
-    'utils/card-builders.js',
-    'utils/statistics-collectors.js',
-    'utils/statistics-card-builders.js',
-    'utils/theme-manager.js',
-    'utils/config-manager.js',
-    
-    // Views next
-    'views/overview-view.js',
-    'views/room-view.js',
-    'views/statistics-view.js',
-    'views/settings-view.js',
-    
-    // Main strategy last
-    'strategy.js'
-  ];
+// Load views
+import './views/overview-view.js';
+import './views/room-view.js';
+import './views/statistics-view.js';
+import './views/settings-view.js';
 
-  let modulesLoaded = 0;
-  const totalModules = modules.length;
+// Load main strategy (must be last)
+import './strategy.js';
 
-  /**
-   * Load a single module script
-   */
-  function loadModule(modulePath) {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.type = 'module';
-      script.src = `${BASE_PATH}/dist/${modulePath}?v=${VERSION}`;
-      
-      script.onload = () => {
-        modulesLoaded++;
-        console.debug(`[L30NEYN] Loaded ${modulesLoaded}/${totalModules}: ${modulePath}`);
-        resolve();
-      };
-      
-      script.onerror = (error) => {
-        console.error(`[L30NEYN] Failed to load: ${modulePath}`, error);
-        console.error(`[L30NEYN] Full path: ${BASE_PATH}/dist/${modulePath}`);
-        reject(new Error(`Failed to load ${modulePath}`));
-      };
-      
-      document.head.appendChild(script);
-    });
-  }
-
-  /**
-   * Load all modules sequentially
-   */
-  async function loadAllModules() {
-    console.debug(`[L30NEYN] Starting to load ${totalModules} modules...`);
-    console.debug(`[L30NEYN] Base path: ${BASE_PATH}`);
-    
-    try {
-      for (const module of modules) {
-        await loadModule(module);
-      }
-      
-      console.info(
-        '%c L30NEYN-DASHBOARD %c Ready! ',
-        'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;',
-        'background: #2196F3; color: #fff; font-weight: bold; padding: 3px 5px;'
-      );
-      
-      // Dispatch ready event
-      window.dispatchEvent(new CustomEvent('l30neyn-dashboard-ready', {
-        detail: { version: VERSION }
-      }));
-      
-    } catch (error) {
-      console.error('[L30NEYN] Failed to load strategy:', error);
-      
-      // Show user-friendly error
-      const errorMsg = `L30NEYN Dashboard Strategy failed to load. Check browser console for details.`;
-      console.error(errorMsg);
-      console.error('[L30NEYN] Verify files are installed in: /config/www/community/L30NEYN-Dashboard-Strategy/');
-    }
-  }
-
-  /**
-   * Initialize when DOM is ready
-   */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadAllModules);
-  } else {
-    loadAllModules();
-  }
-
-})();
+console.info(
+  '%c L30NEYN-DASHBOARD %c Loaded! ',
+  'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;',
+  'background: #2196F3; color: #fff; font-weight: bold; padding: 3px 5px;'
+);
