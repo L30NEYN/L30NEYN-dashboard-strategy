@@ -1,6 +1,6 @@
 {
   "name": "L30NEYN Dashboard Strategy",
-  "content_in_root": false,
+  "content_in_root": true,
   "filename": "l30neyn-dashboard-strategy.js",
   "render_readme": true,
   "homeassistant": "2024.1.0"
