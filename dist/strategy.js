@@ -5,7 +5,7 @@
  * Automatically generates overview and room views with grouped entity controls.
  * Now with settings panel, theme management, and statistics.
  * 
- * @author L30NEYN (Leon Heyn)
+ * @author L30NEYN
  * @version 1.1.0
  * @license MIT
  */
