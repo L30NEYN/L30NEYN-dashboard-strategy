@@ -1,10 +1,10 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.3.3
+ * @version 1.3.4
  * @license MIT
  */
 
-const VERSION = '1.3.3';
+const VERSION = '1.3.4';
 
 console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
@@ -20,6 +20,62 @@ const callWS = async (hass, message) => {
     return await hass.connection.sendMessagePromise(message);
   }
   throw new Error('No WebSocket method available on hass object');
+};
+
+// ─── REGISTRY DATA LOADER ───────────────────────────────────────────────────────────────────
+
+const loadRegistryData = async (hass) => {
+  // Prüfe ob hass vollständig ist
+  if (!hass) {
+    throw new Error('HASS object is null or undefined');
+  }
+
+  // Option 1: Nutze gecachte Registry-Daten (schnellste Methode)
+  const cachedAreas = hass.areas ? Object.values(hass.areas) : [];
+  const cachedDevices = hass.devices ? Object.values(hass.devices) : [];
+  const cachedEntities = hass.entities ? Object.values(hass.entities) : [];
+
+  if (cachedAreas.length > 0 || cachedDevices.length > 0 || cachedEntities.length > 0) {
+    console.info('[L30NEYN] Using cached registry data from hass object');
+    console.info(`[L30NEYN] Cached: ${cachedAreas.length} areas, ${cachedDevices.length} devices, ${cachedEntities.length} entities`);
+    return {
+      areas: cachedAreas,
+      devices: cachedDevices,
+      entities: cachedEntities,
+      source: 'cached'
+    };
+  }
+
+  // Option 2: Lade über WebSocket (wenn keine gecachten Daten verfügbar)
+  console.info('[L30NEYN] No cached data available, loading via WebSocket...');
+  
+  try {
+    const [areas, devices, entities] = await Promise.all([
+      callWS(hass, { type: 'config/area_registry/list' }),
+      callWS(hass, { type: 'config/device_registry/list' }),
+      callWS(hass, { type: 'config/entity_registry/list' }),
+    ]);
+    
+    console.info(`[L30NEYN] Loaded via WebSocket: ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
+    
+    return {
+      areas: areas || [],
+      devices: devices || [],
+      entities: entities || [],
+      source: 'websocket'
+    };
+  } catch (wsError) {
+    console.warn('[L30NEYN] WebSocket loading failed:', wsError.message);
+    
+    // Option 3: Letzte Notfall-Fallback - leere Daten mit Fehlermeldung
+    return {
+      areas: [],
+      devices: [],
+      entities: [],
+      source: 'error',
+      error: wsError.message
+    };
+  }
 };
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────────────────────────
@@ -114,6 +170,30 @@ const L30NEYNCardBuilders = {
     if (data.windows.length) { entities.push({ type: 'section', label: 'Fenster' }); entities.push(...data.windows); }
     return { type: 'entities', title: 'Sicherheit', entities, ...options };
   },
+  buildErrorCard(error, details = '') {
+    const troubleshooting = `
+## Fehlerbehebung
+
+1. **Seite neu laden** (F5 oder Strg+R)
+2. **Cache leeren** (Strg+Shift+R)
+3. **Browser-Konsole prüfen** (F12 → Console)
+4. **Home Assistant neu starten**
+
+### Technische Details
+\`\`\`
+${details}
+\`\`\`
+
+### Support
+Bei weiteren Problemen öffne ein Issue auf:
+[GitHub Repository](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
+    `.trim();
+
+    return {
+      type: 'markdown',
+      content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n${troubleshooting}`
+    };
+  }
 };
 
 // ─── DATA COLLECTORS ────────────────────────────────────────────────────────────────────────────
@@ -289,49 +369,79 @@ class L30NEYNDashboardStrategy {
     try {
       console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
       console.info('[L30NEYN] Config:', config);
-      console.info('[L30NEYN] HASS available methods:', {
-        callWS: typeof hass.callWS,
-        connection: typeof hass.connection,
-        sendMessagePromise: hass.connection ? typeof hass.connection.sendMessagePromise : 'N/A'
+      
+      // Debug-Info über verfügbare HASS-Methoden
+      console.info('[L30NEYN] HASS object analysis:', {
+        hasCallWS: typeof hass?.callWS === 'function',
+        hasConnection: !!hass?.connection,
+        hasSendMessage: typeof hass?.connection?.sendMessagePromise === 'function',
+        hasCachedAreas: !!hass?.areas,
+        hasCachedDevices: !!hass?.devices,
+        hasCachedEntities: !!hass?.entities,
+        hasStates: !!hass?.states
       });
       
-      // Lade Registry-Daten über WebSocket API mit Fallback
-      console.info('[L30NEYN] Loading registry data via WebSocket...');
-      const [areas, devices, entities] = await Promise.all([
-        callWS(hass, { type: 'config/area_registry/list' }),
-        callWS(hass, { type: 'config/device_registry/list' }),
-        callWS(hass, { type: 'config/entity_registry/list' }),
-      ]);
+      // Lade Registry-Daten mit intelligentem Fallback
+      const registryData = await loadRegistryData(hass);
       
-      console.info(`[L30NEYN] Loaded ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
+      // Prüfe ob Daten erfolgreich geladen wurden
+      if (registryData.source === 'error') {
+        console.error('[L30NEYN] Failed to load registry data');
+        return {
+          views: [{
+            title: 'Fehler',
+            path: 'overview',
+            icon: 'mdi:alert-circle',
+            cards: [
+              L30NEYNCardBuilders.buildErrorCard(
+                'Registry-Daten konnten nicht geladen werden',
+                `Datenquelle: ${registryData.source}\nFehler: ${registryData.error || 'Unbekannt'}\n\nBitte Seite neu laden (F5)`
+              )
+            ]
+          }]
+        };
+      }
       
-      const registry = { areas, devices, entities };
+      console.info(`[L30NEYN] Registry data loaded from: ${registryData.source}`);
+      console.info(`[L30NEYN] Data: ${registryData.areas.length} areas, ${registryData.devices.length} devices, ${registryData.entities.length} entities`);
+      
+      const registry = {
+        areas: registryData.areas,
+        devices: registryData.devices,
+        entities: registryData.entities
+      };
+      
       const views = [];
       
       // Overview View
       views.push(L30NEYNOverviewView.generate(hass, config, registry));
       
       // Room Views
-      for (const area of areas) {
+      for (const area of registryData.areas) {
         if (!area?.area_id) continue;
         if (area.labels?.includes('no_dboard')) continue;
         views.push(L30NEYNRoomView.generate(area.area_id, hass, config, registry));
       }
       
-      console.info(`[L30NEYN] Generated ${views.length} views`);
+      console.info(`[L30NEYN] Dashboard generated successfully with ${views.length} views`);
       return { views };
+      
     } catch (e) {
-      console.error('[L30NEYN] Generate error:', e);
-      return { 
-        views: [{ 
-          title: 'Fehler', 
-          path: 'overview', 
-          icon: 'mdi:alert', 
-          cards: [{ 
-            type: 'markdown', 
-            content: `# Fehler beim Laden\n\n${e.message}\n\n${e.stack}` 
-          }] 
-        }] 
+      console.error('[L30NEYN] Critical error during generation:', e);
+      console.error('[L30NEYN] Stack trace:', e.stack);
+      
+      return {
+        views: [{
+          title: 'Kritischer Fehler',
+          path: 'overview',
+          icon: 'mdi:alert-octagon',
+          cards: [
+            L30NEYNCardBuilders.buildErrorCard(
+              'Dashboard-Generierung fehlgeschlagen',
+              `Fehler: ${e.message}\n\nStack Trace:\n${e.stack || 'Nicht verfügbar'}`
+            )
+          ]
+        }]
       };
     }
   }
