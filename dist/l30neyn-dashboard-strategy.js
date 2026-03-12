@@ -1,10 +1,10 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.2.3
+ * @version 1.3.0
  * @license MIT
  */
 
-const VERSION = '1.2.3';
+const VERSION = '1.3.0';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────
 
@@ -266,63 +266,56 @@ const L30NEYNRoomView = {
   },
 };
 
-// ─── REGISTRY HELPER ──────────────────────────────────────────────────────
-
-async function fetchRegistries(hass) {
-  try {
-    const [entities, devices, areas] = await Promise.all([
-      hass.callWS({ type: 'config/entity_registry/list' }).catch(() => []),
-      hass.callWS({ type: 'config/device_registry/list' }).catch(() => []),
-      hass.callWS({ type: 'config/area_registry/list' }).catch(() => []),
-    ]);
-    return {
-      entities: Array.isArray(entities) ? entities : [],
-      devices: Array.isArray(devices) ? devices : [],
-      areas: Array.isArray(areas) ? areas : [],
-    };
-  } catch (e) {
-    return { entities: [], devices: [], areas: [] };
-  }
-}
-
 // ─── DASHBOARD STRATEGY ───────────────────────────────────────────────────
-// Must NOT extend HTMLElement - HA strategies are plain classes
+// WICHTIG: Signature muss genau so sein wie Home Assistant es erwartet!
+// generate(config, hass) - NICHT generate(info)!
 
 class L30NEYNDashboardStrategy {
-  static async generate(info) {
+  static async generate(config, hass) {
     try {
-      const { hass, config = {} } = info;
-      const registry = await fetchRegistries(hass);
+      console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
+      
+      // Hole Registry-Daten aus hass-Objekt (wie Simon42)
+      const areas = Object.values(hass.areas || {});
+      const devices = Object.values(hass.devices || {});
+      const entities = Object.values(hass.entities || {});
+      
+      const registry = { areas, devices, entities };
       const views = [];
+      
+      // Overview View
       views.push(L30NEYNOverviewView.generate(hass, config, registry));
-      for (const area of (registry.areas || [])) {
+      
+      // Room Views
+      for (const area of areas) {
         if (!area?.area_id) continue;
         if (area.labels?.includes('no_dboard')) continue;
         views.push(L30NEYNRoomView.generate(area.area_id, hass, config, registry));
       }
+      
+      console.info(`[L30NEYN] Generated ${views.length} views`);
       return { views };
     } catch (e) {
-      console.error('[L30NEYN] generateDashboard error:', e);
-      return { views: [{ title: 'Fehler', path: 'overview', icon: 'mdi:alert', cards: [{ type: 'markdown', content: `# Fehler\n\n${e.message}` }] }] };
-    }
-  }
-
-  static async generateView(info) {
-    try {
-      const { hass, config = {}, view } = info;
-      const registry = await fetchRegistries(hass);
-      const path = view?.path || 'overview';
-      if (path === 'overview') return L30NEYNOverviewView.generate(hass, config, registry);
-      return L30NEYNRoomView.generate(path, hass, config, registry);
-    } catch (e) {
-      console.error('[L30NEYN] generateView error:', e);
-      return { title: 'Fehler', path: info.view?.path || 'error', icon: 'mdi:alert', cards: [{ type: 'markdown', content: `# Fehler\n\n${e.message}` }] };
+      console.error('[L30NEYN] Generate error:', e);
+      return { 
+        views: [{ 
+          title: 'Fehler', 
+          path: 'overview', 
+          icon: 'mdi:alert', 
+          cards: [{ 
+            type: 'markdown', 
+            content: `# Fehler beim Laden\n\n${e.message}\n\n${e.stack}` 
+          }] 
+        }] 
+      };
     }
   }
 }
 
 // ─── REGISTER ─────────────────────────────────────────────────────────────
-// type: custom:l30neyn  →  element name: ll-strategy-dashboard-l30neyn
+// Home Assistant Dashboard Strategy Registration
+// YAML: type: custom:l30neyn
+// Element: ll-strategy-dashboard-l30neyn
 
 customElements.define('ll-strategy-dashboard-l30neyn', L30NEYNDashboardStrategy);
 
