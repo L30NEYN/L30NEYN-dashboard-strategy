@@ -1,5 +1,6 @@
 {
   "name": "L30NEYN Dashboard Strategy",
+  "type": "plugin",
   "filename": "l30neyn-dashboard-strategy.js",
   "content_in_root": true,
   "render_readme": true,
