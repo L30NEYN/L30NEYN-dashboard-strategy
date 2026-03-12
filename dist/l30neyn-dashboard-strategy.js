@@ -1,6 +1,6 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.4.0
+ * @version 1.4.1
  * @license MIT
  *
  * WICHTIG: Dieses Script ist bewusst KEIN ES-Modul.
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.4.0';
+  const VERSION = '1.4.1';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ─── WEBSOCKET HELPER ──────────────────────────────────────────────────────
@@ -49,6 +49,13 @@
 
   // ─── HELPERS ───────────────────────────────────────────────────────────────
 
+  // HA-interne Pfade die KEIN Dashboard sind
+  const HA_INTERNAL_PATHS = new Set([
+    'lovelace', 'config', 'developer-tools', 'profile', 'history',
+    'logbook', 'map', 'energy', 'shopping-list', 'media-browser',
+    'todo', 'calendar', 'supervisor', 'hassio',
+  ]);
+
   const H = {
     filterByLabels(entities) {
       return entities.filter(e => e?.entity_id && !(e.labels?.includes('no_dboard')));
@@ -83,18 +90,40 @@
       (devices || []).forEach(d => { if (d?.area_id) m.set(d.id, d.area_id); });
       return m;
     },
-    getAreaConfig(config, areaId) {
-      return config?.areas_options?.[areaId] || {};
-    },
     getHiddenEntities(config, areaId, domain) {
       return config?.areas_options?.[areaId]?.groups_options?.[domain]?.hidden || [];
     },
+
+    /**
+     * Ermittelt den Dashboard-Basispfad.
+     *
+     * Prioritaet:
+     *  1. Explizit in der Strategy-Config gesetzt:  dashboard_path: home
+     *  2. Automatisch aus window.location gelesen:  /home/overview → /home
+     *
+     * Niemals hardcoded. Niemals ein HA-interner Pfad.
+     */
     getDashboardPath(config) {
-      // Nutze konfigurierten Pfad, oder versuche aktuellen Pfad aus URL zu lesen
-      if (config?.dashboard_path) return '/' + config.dashboard_path;
-      const pathParts = window.location.pathname.split('/');
-      // z.B. /dashboard-dfghdgh/0 → dashboard-dfghdgh
-      if (pathParts[1] && pathParts[1] !== 'lovelace') return '/' + pathParts[1];
+      // 1. Explizit konfiguriert
+      if (config?.dashboard_path) {
+        const p = String(config.dashboard_path).replace(/^\//, '');
+        console.info(`[L30NEYN] Dashboard path from config: /${p}`);
+        return '/' + p;
+      }
+
+      // 2. Aus URL lesen
+      try {
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        // segments[0] ist der erste Pfad-Teil, z.B. "home" bei /home/overview
+        const first = segments[0];
+        if (first && !HA_INTERNAL_PATHS.has(first)) {
+          console.info(`[L30NEYN] Dashboard path from URL: /${first}`);
+          return '/' + first;
+        }
+      } catch (_) {}
+
+      // 3. Letzter Fallback (Standard-Lovelace)
+      console.warn('[L30NEYN] Could not determine dashboard path, falling back to /lovelace');
       return '/lovelace';
     },
   };
@@ -102,7 +131,6 @@
   // ─── MUSHROOM CARD BUILDERS ────────────────────────────────────────────────
 
   const Cards = {
-    // Mushroom Light Card
     light(entityId) {
       return {
         type: 'custom:mushroom-light-card',
@@ -114,7 +142,6 @@
         fill_container: false,
       };
     },
-    // Mushroom Cover Card
     cover(entityId) {
       return {
         type: 'custom:mushroom-cover-card',
@@ -125,7 +152,6 @@
         fill_container: false,
       };
     },
-    // Mushroom Climate Card
     climate(entityId) {
       return {
         type: 'custom:mushroom-climate-card',
@@ -135,7 +161,6 @@
         fill_container: false,
       };
     },
-    // Mushroom Fan Card
     fan(entityId) {
       return {
         type: 'custom:mushroom-fan-card',
@@ -146,7 +171,6 @@
         fill_container: false,
       };
     },
-    // Mushroom Entity Card (Switch, allgemein)
     entity(entityId, options = {}) {
       return {
         type: 'custom:mushroom-entity-card',
@@ -155,7 +179,6 @@
         ...options,
       };
     },
-    // Mushroom Media Player Card
     mediaPlayer(entityId) {
       return {
         type: 'custom:mushroom-media-player-card',
@@ -168,65 +191,37 @@
         fill_container: false,
       };
     },
-    // Chips fuer Raum-Uebersicht (Lichter, Cover)
-    chips(entities, hass) {
-      const chips = [];
-      const lights = entities.filter(e => e.startsWith('light.'));
-      if (lights.length) {
-        chips.push({ type: 'light', entity: lights[0], show_brightness: true });
-      }
-      return chips.length ? [
-        { type: 'custom:mushroom-chips-card', chips }
-      ] : [];
-    },
-    // Trennlinie mit Titel
     section(label) {
       return { type: 'custom:mushroom-title-card', title: label, subtitle: '' };
     },
-    // Fehler-Card
     error(error, details = '') {
       return {
         type: 'markdown',
-        content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n## Fehlerbehebung\n1. **Seite neu laden** (F5 oder Strg+R)\n2. **Cache leeren** (Strg+Shift+R)\n3. **Browser-Konsole pruefen** (F12 → Console)\n4. **Home Assistant neu starten**\n\n### Details\n\`\`\`\n${details}\n\`\`\``
+        content: `# \u26a0\ufe0f Dashboard Fehler\n\n**${error}**\n\n## Fehlerbehebung\n1. **Seite neu laden** (F5)\n2. **Cache leeren** (Strg+Shift+R)\n3. **Browser-Konsole** (F12 \u2192 Console)\n\n### Details\n\`\`\`\n${details}\n\`\`\``
       };
     },
-    // Wetter
     weather(entity) {
       return { type: 'weather-forecast', entity, show_forecast: true };
     },
-    // Raum-Button (Mushroom Template Card als Nav-Button)
     roomButton(area, dashboardPath, lightEntity) {
       return {
         type: 'custom:mushroom-template-card',
         primary: area.name,
         icon: area.icon || 'mdi:home',
-        icon_color: lightEntity ? '{{ "amber" if is_state("' + lightEntity + '", "on") else "grey" }}' : 'grey',
+        icon_color: lightEntity
+          ? '{{ "amber" if is_state("' + lightEntity + '", "on") else "grey" }}'
+          : 'grey',
         tap_action: { action: 'navigate', navigation_path: `${dashboardPath}/${area.area_id}` },
         fill_container: false,
       };
     },
-    // Gruppen-Steuerung (Mushroom)
     groupControl(entities, domain) {
       if (domain === 'light') {
         return {
           type: 'horizontal-stack',
           cards: [
-            {
-              type: 'custom:mushroom-template-card',
-              primary: 'Alle an',
-              icon: 'mdi:lightbulb-group',
-              icon_color: 'amber',
-              tap_action: { action: 'call-service', service: 'light.turn_on', service_data: { entity_id: entities } },
-              fill_container: true,
-            },
-            {
-              type: 'custom:mushroom-template-card',
-              primary: 'Alle aus',
-              icon: 'mdi:lightbulb-group-off',
-              icon_color: 'grey',
-              tap_action: { action: 'call-service', service: 'light.turn_off', service_data: { entity_id: entities } },
-              fill_container: true,
-            },
+            { type: 'custom:mushroom-template-card', primary: 'Alle an',  icon: 'mdi:lightbulb-group',     icon_color: 'amber',     tap_action: { action: 'call-service', service: 'light.turn_on',  service_data: { entity_id: entities } }, fill_container: true },
+            { type: 'custom:mushroom-template-card', primary: 'Alle aus', icon: 'mdi:lightbulb-group-off', icon_color: 'grey',      tap_action: { action: 'call-service', service: 'light.turn_off', service_data: { entity_id: entities } }, fill_container: true },
           ],
         };
       }
@@ -234,22 +229,8 @@
         return {
           type: 'horizontal-stack',
           cards: [
-            {
-              type: 'custom:mushroom-template-card',
-              primary: 'Alle hoch',
-              icon: 'mdi:arrow-up-box',
-              icon_color: 'blue',
-              tap_action: { action: 'call-service', service: 'cover.open_cover', service_data: { entity_id: entities } },
-              fill_container: true,
-            },
-            {
-              type: 'custom:mushroom-template-card',
-              primary: 'Alle runter',
-              icon: 'mdi:arrow-down-box',
-              icon_color: 'blue-grey',
-              tap_action: { action: 'call-service', service: 'cover.close_cover', service_data: { entity_id: entities } },
-              fill_container: true,
-            },
+            { type: 'custom:mushroom-template-card', primary: 'Alle hoch',   icon: 'mdi:arrow-up-box',   icon_color: 'blue',      tap_action: { action: 'call-service', service: 'cover.open_cover',  service_data: { entity_id: entities } }, fill_container: true },
+            { type: 'custom:mushroom-template-card', primary: 'Alle runter', icon: 'mdi:arrow-down-box', icon_color: 'blue-grey', tap_action: { action: 'call-service', service: 'cover.close_cover', service_data: { entity_id: entities } }, fill_container: true },
           ],
         };
       }
@@ -262,7 +243,7 @@
   const Collectors = {
     collectRoomEntities(areaId, hass, entities, devices, config) {
       const deviceAreaMap = H.buildDeviceAreaMap(devices);
-      let ae = H.filterAvailable(H.filterByLabels(H.filterByArea(entities, areaId, deviceAreaMap)));
+      const ae = H.filterAvailable(H.filterByLabels(H.filterByArea(entities, areaId, deviceAreaMap)));
       const result = {};
       for (const [domain, ents] of H.groupByDomain(ae)) {
         const hidden = H.getHiddenEntities(config, areaId, domain);
@@ -274,8 +255,7 @@
     collectSecurity(hass, entities) {
       const DOMAINS = new Set(['lock', 'binary_sensor', 'alarm_control_panel']);
       const sec = H.filterAvailable(H.filterByLabels(entities.filter(e => e?.entity_id && DOMAINS.has(e.entity_id.split('.')[0]))));
-      const locks = [], doors = [], windows = [];
-      let alarm = null;
+      const locks = [], doors = [], windows = []; let alarm = null;
       sec.forEach(e => {
         const s = hass.states[e.entity_id]; if (!s) return;
         const d = e.entity_id.split('.')[0];
@@ -308,9 +288,9 @@
 
   // ─── OVERVIEW VIEW ─────────────────────────────────────────────────────────
 
-  const DOMAIN_ORDER  = ['light', 'cover', 'climate', 'fan', 'switch', 'media_player', 'sensor', 'binary_sensor', 'camera'];
+  const DOMAIN_ORDER = ['light', 'cover', 'climate', 'fan', 'switch', 'media_player', 'sensor', 'binary_sensor', 'camera'];
   const DOMAIN_TITLES = {
-    light: 'Beleuchtung', cover: 'Rollos & Vorhaenge', climate: 'Klima',
+    light: 'Beleuchtung', cover: 'Rollos & Vorh\u00e4nge', climate: 'Klima',
     fan: 'Ventilatoren', switch: 'Schalter', media_player: 'Medien',
     sensor: 'Sensoren', binary_sensor: 'Status', camera: 'Kameras',
   };
@@ -322,16 +302,13 @@
         const dashboardPath = H.getDashboardPath(config);
         const cards = [];
 
-        // Greeting
         const hour = new Date().getHours();
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
         cards.push({ type: 'custom:mushroom-title-card', title: greeting, subtitle: 'Willkommen im Smart Home' });
 
-        // Wetter
         const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
         if (weatherEntity) cards.push(Cards.weather(weatherEntity));
 
-        // Raum-Buttons Grid
         if (config.show_areas !== false) {
           const deviceAreaMap = H.buildDeviceAreaMap(devices);
           const filteredAreas = areas.filter(a => a && !(a.labels?.includes('no_dboard')));
@@ -345,44 +322,33 @@
           }
         }
 
-        // Sicherheit
         if (config.show_security !== false) {
           const sec = Collectors.collectSecurity(hass, entities);
           if (sec.locks.length || sec.doors.length || sec.windows.length || sec.alarm) {
-            const secEntities = [];
-            if (sec.alarm) secEntities.push(Cards.entity(sec.alarm));
-            if (sec.locks.length) {
-              secEntities.push(Cards.section('Schloesser'));
-              sec.locks.forEach(id => secEntities.push(Cards.entity(id)));
-            }
-            if (sec.doors.length) {
-              secEntities.push(Cards.section('Tueren'));
-              sec.doors.forEach(id => secEntities.push(Cards.entity(id)));
-            }
-            if (sec.windows.length) {
-              secEntities.push(Cards.section('Fenster'));
-              sec.windows.forEach(id => secEntities.push(Cards.entity(id)));
-            }
-            cards.push({ type: 'custom:mushroom-title-card', title: 'Sicherheit', subtitle: '' });
-            cards.push({ type: 'grid', cards: secEntities, columns: 2, square: false });
+            const secCards = [];
+            if (sec.alarm) secCards.push(Cards.entity(sec.alarm));
+            if (sec.locks.length)   { secCards.push(Cards.section('Schl\u00f6sser')); sec.locks.forEach(id => secCards.push(Cards.entity(id))); }
+            if (sec.doors.length)   { secCards.push(Cards.section('T\u00fcren'));     sec.doors.forEach(id => secCards.push(Cards.entity(id))); }
+            if (sec.windows.length) { secCards.push(Cards.section('Fenster'));   sec.windows.forEach(id => secCards.push(Cards.entity(id))); }
+            cards.push(Cards.section('Sicherheit'));
+            cards.push({ type: 'grid', cards: secCards, columns: 2, square: false });
           }
         }
 
-        // Batterie-Status
         if (config.show_battery_status !== false) {
           const bats = Collectors.collectBatteries(hass, entities);
           if (bats.critical.length || bats.low.length) {
             cards.push(Cards.section('Batterie-Warnung'));
-            if (bats.critical.length) bats.critical.forEach(id => cards.push(Cards.entity(id, { icon_color: 'red' })));
-            if (bats.low.length)      bats.low.forEach(id => cards.push(Cards.entity(id, { icon_color: 'orange' })));
+            bats.critical.forEach(id => cards.push(Cards.entity(id, { icon_color: 'red' })));
+            bats.low.forEach(id => cards.push(Cards.entity(id, { icon_color: 'orange' })));
           }
         }
 
         if (!cards.length) cards.push({ type: 'markdown', content: 'Dashboard wird geladen...' });
-        return { title: 'Uebersicht', path: 'overview', icon: 'mdi:home', cards };
+        return { title: '\u00dcbersicht', path: 'overview', icon: 'mdi:home', cards };
       } catch (e) {
         console.error('[L30NEYN] OverviewView error:', e);
-        return { title: 'Uebersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
+        return { title: '\u00dcbersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
       }
     },
   };
@@ -397,58 +363,38 @@
         if (!area) return { title: areaId, path: areaId, cards: [Cards.error('Raum nicht gefunden: ' + areaId)] };
 
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
-        const allEntityIds = Object.values(roomEntities).flat();
         const cards = [];
 
-        // Raum-Titel
-        const lightsOn = (roomEntities.light || []).filter(id => hass.states[id]?.state === 'on').length;
+        const lightsOn    = (roomEntities.light || []).filter(id => hass.states[id]?.state === 'on').length;
         const totalLights = (roomEntities.light || []).length;
-        const subtitle = totalLights ? `${lightsOn} von ${totalLights} Lichtern an` : '';
+        const subtitle    = totalLights ? `${lightsOn} von ${totalLights} Lichtern an` : '';
         cards.push({ type: 'custom:mushroom-title-card', title: area.name, subtitle, icon: area.icon || 'mdi:home' });
 
-        // Gruppen-Steuerung
-        if ((roomEntities.light || []).length > 1) {
-          const gc = Cards.groupControl(roomEntities.light, 'light');
-          if (gc) cards.push(gc);
-        }
-        if ((roomEntities.cover || []).length > 1) {
-          const gc = Cards.groupControl(roomEntities.cover, 'cover');
-          if (gc) cards.push(gc);
-        }
+        if ((roomEntities.light || []).length > 1) { const gc = Cards.groupControl(roomEntities.light, 'light'); if (gc) cards.push(gc); }
+        if ((roomEntities.cover || []).length > 1) { const gc = Cards.groupControl(roomEntities.cover, 'cover'); if (gc) cards.push(gc); }
 
-        // Domain-Cards
         for (const domain of DOMAIN_ORDER) {
           if (!roomEntities[domain]?.length) continue;
-          const title = DOMAIN_TITLES[domain] || domain;
-          cards.push(Cards.section(title));
-
-          if (domain === 'light') {
-            roomEntities[domain].forEach(id => cards.push(Cards.light(id)));
-          } else if (domain === 'cover') {
-            roomEntities[domain].forEach(id => cards.push(Cards.cover(id)));
-          } else if (domain === 'climate') {
-            roomEntities[domain].forEach(id => cards.push(Cards.climate(id)));
-          } else if (domain === 'fan') {
-            roomEntities[domain].forEach(id => cards.push(Cards.fan(id)));
-          } else if (domain === 'media_player') {
-            roomEntities[domain].forEach(id => cards.push(Cards.mediaPlayer(id)));
-          } else if (domain === 'sensor' || domain === 'binary_sensor') {
-            const relevant = roomEntities[domain].filter(id => {
-              const s = hass.states[id];
-              return ['temperature', 'humidity', 'illuminance', 'motion', 'occupancy', 'door', 'window', 'battery'].includes(s?.attributes?.device_class);
-            });
-            if (relevant.length) relevant.forEach(id => cards.push(Cards.entity(id)));
-            else continue; // Section nicht anzeigen wenn keine relevanten Entities
-          } else {
-            roomEntities[domain].forEach(id => cards.push(Cards.entity(id)));
+          cards.push(Cards.section(DOMAIN_TITLES[domain] || domain));
+          if (domain === 'light')        roomEntities[domain].forEach(id => cards.push(Cards.light(id)));
+          else if (domain === 'cover')   roomEntities[domain].forEach(id => cards.push(Cards.cover(id)));
+          else if (domain === 'climate') roomEntities[domain].forEach(id => cards.push(Cards.climate(id)));
+          else if (domain === 'fan')     roomEntities[domain].forEach(id => cards.push(Cards.fan(id)));
+          else if (domain === 'media_player') roomEntities[domain].forEach(id => cards.push(Cards.mediaPlayer(id)));
+          else if (domain === 'sensor' || domain === 'binary_sensor') {
+            const relevant = roomEntities[domain].filter(id =>
+              ['temperature','humidity','illuminance','motion','occupancy','door','window','battery']
+                .includes(hass.states[id]?.attributes?.device_class)
+            );
+            if (!relevant.length) { cards.pop(); continue; } // Section wieder entfernen
+            relevant.forEach(id => cards.push(Cards.entity(id)));
           }
+          else roomEntities[domain].forEach(id => cards.push(Cards.entity(id)));
         }
 
         return {
-          title: area.name,
-          path: areaId,
-          icon: area.icon || 'mdi:home',
-          cards: cards.length > 1 ? cards : [Cards.entity, { type: 'markdown', content: 'Keine Geraete in diesem Raum.' }],
+          title: area.name, path: areaId, icon: area.icon || 'mdi:home',
+          cards: cards.length > 1 ? cards : [{ type: 'markdown', content: 'Keine Ger\u00e4te in diesem Raum.' }],
         };
       } catch (e) {
         console.error(`[L30NEYN] RoomView error for ${areaId}:`, e);
@@ -458,33 +404,35 @@
   };
 
   // ─── SETTINGS VIEW ─────────────────────────────────────────────────────────
-  // Aehnlich wie Simon42: zeigt alle Entities pro Raum/Domain mit
-  // der aktuellen hidden-Konfiguration als YAML-Vorschau
 
   const SettingsView = {
     generate(hass, config, registry) {
       try {
         const { entities = [], devices = [], areas = [] } = registry;
+        const dashboardPath = H.getDashboardPath(config);
+        // Nur den Pfad-Namen ohne fuehrendes /
+        const pathName = dashboardPath.replace(/^\//, '');
         const cards = [];
 
         cards.push({ type: 'custom:mushroom-title-card', title: 'Einstellungen', subtitle: 'L30NEYN Dashboard v' + VERSION });
 
-        // Erklaerung
+        // Erklaerung mit dynamischem Pfad
         cards.push({
           type: 'markdown',
           content: [
             '## Konfiguration',
             '',
-            'Fuege folgende Config zur Dashboard-Strategy hinzu um Entities auszublenden:',
+            'F\u00fcge folgende Config zur Dashboard-Strategy hinzu um Entities auszublenden.',
+            `Der aktuelle Dashboard-Pfad lautet: \`${pathName}\``,
             '',
             '```yaml',
             'strategy:',
             '  type: custom:l30neyn-dashboard-strategy',
-            '  dashboard_path: dashboard-dfghdgh  # URL-Pfad dieses Dashboards',
+            `  dashboard_path: ${pathName}`,
             '  areas_options:',
             '    <area_id>:',
             '      groups_options:',
-            '        <domain>:',
+            '        <domain>:  # z.B. light, cover, switch',
             '          hidden:',
             '            - entity.id_1',
             '            - entity.id_2',
@@ -492,15 +440,14 @@
           ].join('\n'),
         });
 
-        // Pro Raum: alle Entities auflisten
+        // Pro Raum: alle Entities als YAML-Vorlage
         const filteredAreas = areas.filter(a => a && !(a.labels?.includes('no_dboard')));
         for (const area of filteredAreas) {
           const roomEntities = Collectors.collectRoomEntities(area.area_id, hass, entities, devices, {});
           if (!Object.keys(roomEntities).length) continue;
 
-          cards.push(Cards.section(`${area.icon ? area.icon + ' ' : ''}${area.name}`));
+          cards.push(Cards.section(area.name));
 
-          // YAML-Vorschau fuer diesen Raum
           const yamlLines = [`    ${area.area_id}:`];
           let hasContent = false;
 
@@ -510,16 +457,16 @@
             const hiddenNow = H.getHiddenEntities(config, area.area_id, domain);
             yamlLines.push(`      groups_options:`);
             yamlLines.push(`        ${domain}:`);
-            yamlLines.push(`          # Verfuegbare Entities (zum Ausblenden in 'hidden' eintragen):`);
+            yamlLines.push(`          # Verf\u00fcgbare Entities:`);
             roomEntities[domain].forEach(id => {
-              const marker = hiddenNow.includes(id) ? '  # ← bereits ausgeblendet' : '';
+              const marker = hiddenNow.includes(id) ? '  # \u2190 ausgeblendet' : '';
               yamlLines.push(`          # - ${id}${marker}`);
             });
             if (hiddenNow.length) {
               yamlLines.push(`          hidden:`);
               hiddenNow.forEach(id => yamlLines.push(`            - ${id}`));
             } else {
-              yamlLines.push(`          hidden: []  # Keine Entities ausgeblendet`);
+              yamlLines.push(`          hidden: []`);
             }
           }
 
@@ -531,17 +478,18 @@
           }
         }
 
-        // Alle Entity IDs (Debug-Hilfe)
+        // System-Info
         cards.push(Cards.section('System-Info'));
         cards.push({
           type: 'markdown',
           content: [
-            '### Geladene Daten',
-            `- **Bereiche:** ${areas.length}`,
-            `- **Geraete:** ${devices.length}`,
-            `- **Entities:** ${entities.length}`,
-            `- **Strategy Version:** ${VERSION}`,
-            `- **Dashboard Pfad:** ${H.getDashboardPath(config)}`,
+            '| | |',
+            '|---|---|',
+            `| **Version** | ${VERSION} |`,
+            `| **Dashboard-Pfad** | \`${pathName}\` |`,
+            `| **Bereiche** | ${areas.length} |`,
+            `| **Ger\u00e4te** | ${devices.length} |`,
+            `| **Entities** | ${entities.length} |`,
           ].join('\n'),
         });
 
@@ -560,56 +508,39 @@
       try {
         console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
         console.info('[L30NEYN] Config:', config);
-        console.info('[L30NEYN] HASS analysis:', {
-          hasCachedAreas:    !!hass?.areas,
-          hasCachedDevices:  !!hass?.devices,
-          hasCachedEntities: !!hass?.entities,
-          hasStates:         !!hass?.states,
-        });
+        console.info(`[L30NEYN] Dashboard path: ${H.getDashboardPath(config)}`);
 
         const registryData = await loadRegistryData(hass);
 
         if (registryData.source === 'error') {
-          return {
-            views: [{ title: 'Fehler', path: 'overview', icon: 'mdi:alert-circle',
-              cards: [Cards.error('Registry-Daten konnten nicht geladen werden', `Fehler: ${registryData.error}\n\nBitte Seite neu laden (F5)`)]
-            }]
-          };
+          return { views: [{ title: 'Fehler', path: 'overview', icon: 'mdi:alert-circle',
+            cards: [Cards.error('Registry-Daten konnten nicht geladen werden', `${registryData.error}\n\nBitte Seite neu laden (F5)`)]
+          }]};
         }
 
         console.info(`[L30NEYN] Data: ${registryData.areas.length} areas, ${registryData.devices.length} devices, ${registryData.entities.length} entities`);
 
-        const registry = {
-          areas: registryData.areas,
-          devices: registryData.devices,
-          entities: registryData.entities,
-        };
-
+        const registry = { areas: registryData.areas, devices: registryData.devices, entities: registryData.entities };
         const views = [];
 
-        // 1. Uebersicht
         views.push(OverviewView.generate(hass, config, registry));
 
-        // 2. Raum-Views
         for (const area of registryData.areas) {
           if (!area?.area_id) continue;
           if (area.labels?.includes('no_dboard')) continue;
           views.push(RoomView.generate(area.area_id, hass, config, registry));
         }
 
-        // 3. Einstellungen
         views.push(SettingsView.generate(hass, config, registry));
 
         console.info(`[L30NEYN] Dashboard generated successfully with ${views.length} views`);
         return { views };
 
       } catch (e) {
-        console.error('[L30NEYN] Critical error during generation:', e);
-        return {
-          views: [{ title: 'Kritischer Fehler', path: 'overview', icon: 'mdi:alert-octagon',
-            cards: [Cards.error('Dashboard-Generierung fehlgeschlagen', `Fehler: ${e.message}\n\nStack:\n${e.stack || 'Nicht verfuegbar'}`)]
-          }]
-        };
+        console.error('[L30NEYN] Critical error:', e);
+        return { views: [{ title: 'Kritischer Fehler', path: 'overview', icon: 'mdi:alert-octagon',
+          cards: [Cards.error('Dashboard-Generierung fehlgeschlagen', `${e.message}\n\n${e.stack || ''}`)]
+        }]};
       }
     }
   }
@@ -620,11 +551,8 @@
     customElements.define('ll-strategy-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
     console.info('[L30NEYN] Strategy v' + VERSION + ' registered successfully!');
   } catch (e) {
-    if (e.name === 'NotSupportedError') {
-      console.warn('[L30NEYN] Already registered - skipping');
-    } else {
-      console.error('[L30NEYN] Registration failed:', e);
-    }
+    if (e.name === 'NotSupportedError') console.warn('[L30NEYN] Already registered - skipping');
+    else console.error('[L30NEYN] Registration failed:', e);
   }
 
   console.info(
