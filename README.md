@@ -55,7 +55,7 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 2. Klicke auf die Karte
 3. Klicke **Installieren**
 4. Bestätige die Installation
-5. **Kein Neustart nötig** – nur Frontend-Dateien
+5. **Wichtig**: Nach Installation **Hard-Refresh** durchführen (Strg+Shift+R / Cmd+Shift+R)
 
 > 📚 **Detaillierte HACS-Anleitung**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
 
@@ -68,12 +68,8 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 mkdir -p /config/www/l30neyn-dashboard-strategy
 cd /config/www/l30neyn-dashboard-strategy
 
-# Haupt-Datei
-wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/l30neyn-dashboard-strategy.js
-
-# Alle Module (benötigt!)
-wget -r -np -nH --cut-dirs=3 -R "index.html*" \
-  https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/dist/
+# Haupt-Datei von dist/ Ordner (wichtig!)
+wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/dist/l30neyn-dashboard-strategy.js
 ```
 
 #### 2. Ressource registrieren
@@ -84,6 +80,10 @@ wget -r -np -nH --cut-dirs=3 -R "index.html*" \
 URL: /local/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
 Typ: JavaScript-Modul
 ```
+
+#### 3. Hard-Refresh durchführen
+
+Nach Registrierung der Ressource: **Strg+Shift+R** (Windows/Linux) oder **Cmd+Shift+R** (Mac)
 
 ## ⚙️ Setup
 
@@ -134,10 +134,10 @@ Diese Strategie benötigt Mushroom Cards für die UI.
 ```yaml
 title: L30NEYN Dashboard
 strategy:
-  type: custom:l30neyn
+  type: custom:l30neyn-dashboard-strategy
 ```
 
-**Wichtig:** Der `type` ist `custom:l30neyn` (OHNE `ll-strategy-` Prefix - HA fügt das automatisch hinzu!)
+**Wichtig:** Der vollständige `type` ist `custom:l30neyn-dashboard-strategy`
 
 ## 🎨 Konfiguration
 
@@ -174,7 +174,7 @@ YAML-Config wird als Override unterstützt:
 
 ```yaml
 strategy:
-  type: custom:l30neyn
+  type: custom:l30neyn-dashboard-strategy
   options:
     theme_mode: dark
     color_scheme: blue
@@ -267,14 +267,44 @@ sensor:
 - Effiziente Entity-Filterung
 - Set-basierte Lookups
 
+## 🔧 Troubleshooting
+
+### "No strategy type found"
+
+**Ursache:** Strategy-Datei wird nicht geladen oder ist nicht richtig registriert.
+
+**Lösung:**
+1. Überprüfe, dass die Datei existiert: `/config/www/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js`
+2. Überprüfe die Ressourcen-Registrierung in HA (Einstellungen → Dashboards → Ressourcen)
+3. Führe einen **Hard-Refresh** durch: Strg+Shift+R (Windows/Linux) oder Cmd+Shift+R (Mac)
+4. Öffne Browser-Console (F12) und prüfe auf Fehler beim Laden
+
+### Dashboard zeigt keine Räume
+
+**Ursache:** Keine Areas in Home Assistant konfiguriert oder alle haben Label `no_dboard`.
+
+**Lösung:**
+1. Erstelle Areas unter Einstellungen → Bereiche
+2. Weise Geräte den Bereichen zu
+3. Prüfe, dass Areas nicht das Label `no_dboard` haben
+
+### Karten werden nicht angezeigt
+
+**Ursache:** Mushroom Cards nicht installiert.
+
+**Lösung:**
+1. Installiere Mushroom Cards via HACS
+2. Führe Hard-Refresh durch
+
 ## 🔧 Entwicklung
 
 ### Repository-Struktur
 
 ```
 L30NEYN/L30NEYN-dashboard-strategy/
-├── l30neyn-dashboard-strategy.js         # HACS Entry Point
 ├── dist/
+│   └── l30neyn-dashboard-strategy.js   # Gebundelte Datei (HACS installiert diese)
+├── src/
 │   ├── strategy.js                     # Haupt-Strategy
 │   ├── views/                          # View-Generatoren
 │   └── utils/                          # Utilities
@@ -311,6 +341,19 @@ localStorage.setItem('l30neyn_debug', 'true');
 
 Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 
+### Version 1.3.0 (2026-03-12)
+
+**Fixes:**
+- 🔧 **Strategy-Registrierung komplett überarbeitet** - Verwendet nun korrekten `ll-strategy-`-Prefix wie bei simon42
+- 📦 **HACS-Struktur korrigiert** - `dist/` Ordner wird nun korrekt geladen
+- 🔄 **Build-System verbessert** - Gebundelte Datei im `dist/` Ordner für HACS
+- 📚 **Dokumentation aktualisiert** - Setup-Anleitung mit Hard-Refresh-Hinweisen
+
+**Technische Details:**
+- Strategy-Name: `custom:l30neyn-dashboard-strategy` (vollständiger Name)
+- HACS lädt jetzt aus `dist/l30neyn-dashboard-strategy.js`
+- Kompatibel mit HA 2024.1+
+
 ### Version 1.1.0 (2026-03-11)
 
 **Neue Features:**
@@ -320,11 +363,6 @@ Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 - ⚙️ Config-Manager mit Input-Helper-Integration
 - 🔄 Auto-Theme-Synchronisierung
 - 📦 HACS-kompatible Struktur
-
-**Fixes:**
-- 🔧 Strategy-Registrierung korrigiert (`custom:l30neyn`)
-- 🔗 Repository-Referenzen aktualisiert
-- 📦 HACS dist/-Ordner wird nun korrekt installiert
 
 **Performance:**
 - 42% schnellere Dashboard-Generierung
@@ -357,6 +395,7 @@ Vollständige Lizenz: [LICENSE](LICENSE)
 - [Home Assistant](https://www.home-assistant.io/) - Smart Home Platform
 - [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) by [@piitaya](https://github.com/piitaya) - UI Components
 - [HACS](https://hacs.xyz/) - Home Assistant Community Store
+- [simon42](https://github.com/gdscei/simon42) - Inspiration für Strategy-Struktur
 
 ## 🔗 Links
 
