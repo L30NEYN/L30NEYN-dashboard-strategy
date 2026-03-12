@@ -1,10 +1,10 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.3.0
+ * @version 1.3.1
  * @license MIT
  */
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 
 console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
