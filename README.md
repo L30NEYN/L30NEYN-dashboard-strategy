@@ -266,6 +266,7 @@ sensor:
 - Config Caching (1 Min TTL)
 - Effiziente Entity-Filterung
 - Set-basierte Lookups
+- **Smart Fallback**: Gecachte Registry-Daten werden bevorzugt (v1.3.4+)
 
 ## 🔧 Troubleshooting
 
@@ -295,6 +296,27 @@ sensor:
 **Lösung:**
 1. Installiere Mushroom Cards via HACS
 2. Führe Hard-Refresh durch
+
+### "Registry-Daten konnten nicht geladen werden" (v1.3.4+)
+
+**Ursache:** WebSocket-Verbindung nicht verfügbar und keine gecachten Daten vorhanden.
+
+**Lösung:**
+1. **Seite neu laden** (F5 oder Strg+R) - meist reicht das schon
+2. Warte 10-15 Sekunden nach HA-Start, bevor du das Dashboard öffnest
+3. Prüfe Browser-Console (F12) auf Fehler
+4. Bei persistenten Problemen: Home Assistant neu starten
+
+**Hintergrund:** Ab Version 1.3.4 nutzt die Strategy automatisch gecachte Registry-Daten aus `hass.areas`, `hass.devices`, `hass.entities`. Nur wenn diese nicht verfügbar sind, wird über WebSocket geladen.
+
+### "Unchecked runtime.lastError" in Console
+
+**Ursache:** Browser-Extension versucht mit der Seite zu kommunizieren (NICHT ein Home Assistant Problem).
+
+**Lösung:**
+1. Teste im **Inkognito-Modus** (Extensions deaktiviert)
+2. Deaktiviere Extensions einzeln, um den Verursacher zu finden
+3. Häufige Kandidaten: Werbeblocker, Privacy-Tools, Passwort-Manager
 
 ## 🔧 Entwicklung
 
@@ -340,6 +362,22 @@ localStorage.setItem('l30neyn_debug', 'true');
 ## 📝 Changelog
 
 Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+### Version 1.3.4 (2026-03-12)
+
+**Fixes:**
+- 🔧 **Intelligenter Fallback-Mechanismus** - Nutzt gecachte Registry-Daten aus `hass.areas`, `hass.devices`, `hass.entities` (schnellste Methode)
+- ⚡ **Robustere WebSocket-Fehlerbehandlung** - Automatischer Fallback bei WebSocket-Problemen
+- 📊 **Informative Error-Views** - Zeigt Troubleshooting-Hinweise mit technischen Details
+- 🐛 **Fix für Test-Mocks** - Strategy funktioniert nun auch mit unvollständigen hass-Objekten
+
+**Technische Details:**
+- 3-stufiger Datenlademechanismus:
+  1. Gecachte Daten (bevorzugt)
+  2. WebSocket-API (Fallback)
+  3. Error-View mit Hilfe (letzter Fallback)
+- Bessere Debug-Informationen über verfügbare hass-Methoden
+- Error-Cards mit Copy-Button für Support-Anfragen
 
 ### Version 1.3.0 (2026-03-12)
 
