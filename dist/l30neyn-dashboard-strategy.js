@@ -1,14 +1,14 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.3.1
+ * @version 1.3.2
  * @license MIT
  */
 
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 
 console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────
+// ─── HELPERS ────────────────────────────────────────────────────────────────────────────────────
 
 const L30NEYNHelpers = {
   filterByLabels(entities) {
@@ -65,7 +65,7 @@ const L30NEYNHelpers = {
   },
 };
 
-// ─── CARD BUILDERS ────────────────────────────────────────────────────────
+// ─── CARD BUILDERS ──────────────────────────────────────────────────────────────────────────────
 
 const L30NEYNCardBuilders = {
   buildEntitiesCard(entities, options = {}) {
@@ -102,7 +102,7 @@ const L30NEYNCardBuilders = {
   },
 };
 
-// ─── DATA COLLECTORS ──────────────────────────────────────────────────────
+// ─── DATA COLLECTORS ────────────────────────────────────────────────────────────────────────────
 
 const L30NEYNDataCollectors = {
   collectLights(hass, entities) {
@@ -163,7 +163,7 @@ const L30NEYNDataCollectors = {
   },
 };
 
-// ─── OVERVIEW VIEW ────────────────────────────────────────────────────────
+// ─── OVERVIEW VIEW ──────────────────────────────────────────────────────────────────────────────
 
 const L30NEYNOverviewView = {
   generate(hass, config, registry) {
@@ -225,7 +225,7 @@ const L30NEYNOverviewView = {
   },
 };
 
-// ─── ROOM VIEW ────────────────────────────────────────────────────────────
+// ─── ROOM VIEW ──────────────────────────────────────────────────────────────────────────────────
 
 const DOMAIN_ORDER = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
 const DOMAIN_TITLES = {
@@ -268,21 +268,23 @@ const L30NEYNRoomView = {
   },
 };
 
-// ─── DASHBOARD STRATEGY ───────────────────────────────────────────────────
+// ─── DASHBOARD STRATEGY ─────────────────────────────────────────────────────────────────────────
 
 class L30NEYNDashboardStrategy {
   static async generate(config, hass) {
     try {
       console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
       console.info('[L30NEYN] Config:', config);
-      console.info('[L30NEYN] HASS object:', hass);
       
-      // Hole Registry-Daten aus hass-Objekt (wie Simon42)
-      const areas = Object.values(hass.areas || {});
-      const devices = Object.values(hass.devices || {});
-      const entities = Object.values(hass.entities || {});
+      // Lade Registry-Daten über WebSocket API (wie in offizieller Doku)
+      console.info('[L30NEYN] Loading registry data via WebSocket...');
+      const [areas, devices, entities] = await Promise.all([
+        hass.callWS({ type: 'config/area_registry/list' }),
+        hass.callWS({ type: 'config/device_registry/list' }),
+        hass.callWS({ type: 'config/entity_registry/list' }),
+      ]);
       
-      console.info(`[L30NEYN] Found ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
+      console.info(`[L30NEYN] Loaded ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
       
       const registry = { areas, devices, entities };
       const views = [];
@@ -316,7 +318,7 @@ class L30NEYNDashboardStrategy {
   }
 }
 
-// ─── REGISTER ─────────────────────────────────────────────────────────────
+// ─── REGISTER ───────────────────────────────────────────────────────────────────────────────────
 
 console.info('[L30NEYN] Registering strategy as: ll-strategy-l30neyn-dashboard-strategy');
 
