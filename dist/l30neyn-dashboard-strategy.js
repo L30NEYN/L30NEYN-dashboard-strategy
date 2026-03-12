@@ -6,6 +6,8 @@
 
 const VERSION = '1.3.0';
 
+console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────
 
 const L30NEYNHelpers = {
@@ -267,18 +269,20 @@ const L30NEYNRoomView = {
 };
 
 // ─── DASHBOARD STRATEGY ───────────────────────────────────────────────────
-// WICHTIG: Signature muss genau so sein wie Home Assistant es erwartet!
-// generate(config, hass) - NICHT generate(info)!
 
 class L30NEYNDashboardStrategy {
   static async generate(config, hass) {
     try {
       console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
+      console.info('[L30NEYN] Config:', config);
+      console.info('[L30NEYN] HASS object:', hass);
       
       // Hole Registry-Daten aus hass-Objekt (wie Simon42)
       const areas = Object.values(hass.areas || {});
       const devices = Object.values(hass.devices || {});
       const entities = Object.values(hass.entities || {});
+      
+      console.info(`[L30NEYN] Found ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
       
       const registry = { areas, devices, entities };
       const views = [];
@@ -313,11 +317,15 @@ class L30NEYNDashboardStrategy {
 }
 
 // ─── REGISTER ─────────────────────────────────────────────────────────────
-// Home Assistant Dashboard Strategy Registration
-// YAML: type: custom:l30neyn
-// Element: ll-strategy-dashboard-l30neyn
 
-customElements.define('ll-strategy-dashboard-l30neyn', L30NEYNDashboardStrategy);
+console.info('[L30NEYN] Registering strategy as: ll-strategy-l30neyn-dashboard-strategy');
+
+try {
+  customElements.define('ll-strategy-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
+  console.info('[L30NEYN] Strategy registered successfully!');
+} catch (e) {
+  console.error('[L30NEYN] Registration failed:', e);
+}
 
 console.info(
   `%c L30NEYN-DASHBOARD %c v${VERSION} `,
