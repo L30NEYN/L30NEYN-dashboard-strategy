@@ -1,12 +1,26 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.3.2
+ * @version 1.3.3
  * @license MIT
  */
 
-const VERSION = '1.3.2';
+const VERSION = '1.3.3';
 
 console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
+
+// ─── WEBSOCKET HELPER ───────────────────────────────────────────────────────────────────────
+
+const callWS = async (hass, message) => {
+  // Versuche zuerst hass.callWS (Standard)
+  if (typeof hass.callWS === 'function') {
+    return await hass.callWS(message);
+  }
+  // Fallback: hass.connection.sendMessagePromise
+  if (hass.connection && typeof hass.connection.sendMessagePromise === 'function') {
+    return await hass.connection.sendMessagePromise(message);
+  }
+  throw new Error('No WebSocket method available on hass object');
+};
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────────────────────────
 
@@ -275,13 +289,18 @@ class L30NEYNDashboardStrategy {
     try {
       console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
       console.info('[L30NEYN] Config:', config);
+      console.info('[L30NEYN] HASS available methods:', {
+        callWS: typeof hass.callWS,
+        connection: typeof hass.connection,
+        sendMessagePromise: hass.connection ? typeof hass.connection.sendMessagePromise : 'N/A'
+      });
       
-      // Lade Registry-Daten über WebSocket API (wie in offizieller Doku)
+      // Lade Registry-Daten über WebSocket API mit Fallback
       console.info('[L30NEYN] Loading registry data via WebSocket...');
       const [areas, devices, entities] = await Promise.all([
-        hass.callWS({ type: 'config/area_registry/list' }),
-        hass.callWS({ type: 'config/device_registry/list' }),
-        hass.callWS({ type: 'config/entity_registry/list' }),
+        callWS(hass, { type: 'config/area_registry/list' }),
+        callWS(hass, { type: 'config/device_registry/list' }),
+        callWS(hass, { type: 'config/entity_registry/list' }),
       ]);
       
       console.info(`[L30NEYN] Loaded ${areas.length} areas, ${devices.length} devices, ${entities.length} entities`);
