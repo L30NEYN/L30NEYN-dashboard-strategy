@@ -5,7 +5,7 @@
  * Home Assistant's customElements registration timeout.
  *
  * @author L30NEYN
- * @version 1.2.1
+ * @version 1.2.2
  * @license MIT
  * @see https://github.com/L30NEYN/L30NEYN-dashboard-strategy
  */
@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
 
@@ -790,14 +790,22 @@
     }
   }
 
-  // ─── REGISTER CUSTOM ELEMENT ──────────────────────────────────────────────
-  // customElements name: ll-strategy-dashboard-l30neyn
-  // YAML usage:         strategy: { type: custom:l30neyn }
+  // ─── REGISTER STRATEGY ────────────────────────────────────────────────────
+  // Dashboard Strategies in HA must NOT extend HTMLElement.
+  // They are plain classes registered via customElements.define with
+  // the name pattern: ll-strategy-dashboard-<type>
+  // YAML usage: strategy: { type: custom:l30neyn }
 
-  customElements.define('ll-strategy-dashboard-l30neyn', class extends HTMLElement {
-    static async generate(info) { return L30NEYNDashboardStrategy.generateDashboard(info); }
-    static async generateView(info) { return L30NEYNDashboardStrategy.generateView(info); }
-  });
+  class L30NEYNStrategyElement {
+    static async generate(info) {
+      return L30NEYNDashboardStrategy.generateDashboard(info);
+    }
+    static async generateView(info) {
+      return L30NEYNDashboardStrategy.generateView(info);
+    }
+  }
+
+  customElements.define('ll-strategy-dashboard-l30neyn', L30NEYNStrategyElement);
 
   console.info(
     '%c L30NEYN-DASHBOARD %c v' + VERSION + ' ',
