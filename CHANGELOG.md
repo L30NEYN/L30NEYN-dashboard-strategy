@@ -4,6 +4,55 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [1.6.6] - 2026-03-13
+
+### 🐛 Fixed — Layout-Fix: Spaltenbreite im Raum-View
+
+- **Problem:** `vertical-stack` nutzte HA's Default-`max-width` (~600px), wodurch der innere `horizontal-stack` nur diesen schmalen Bereich auf 5+ Spalten aufteilen musste → Cards viel zu eng
+- **Fix:** `card_mod` auf dem äußeren `vertical-stack` (dem einzigen `roomCard`-Element der View) → `max-width: 100% !important; width: 100% !important;`
+- **Ergebnis:** Der `horizontal-stack` bekommt die volle View-Breite und verteilt die Domain-Spalten korrekt
+
+---
+
+## [1.6.5] - 2026-03-13
+
+### 🐛 Fixed — Header über allen Spalten
+
+- **Problem:** Titel + Chips standen links neben Schalter & Sensoren, weil HA's View-Grid alle Cards gleichwertig verteilte
+- **Fix:** Alles in einen einzigen `vertical-stack` gewrappt — HA's Grid sieht nur noch 1 Card
+
+```
+vertical-stack (einzige Card der View)
+├── mushroom-title-card
+├── mushroom-chips-card
+└── horizontal-stack → alle Spalten nebeneinander
+```
+
+---
+
+## [1.6.4] - 2026-03-13
+
+### ✨ Added — Dedizierter Chip-Header
+
+- `mushroom-template-card`-Header ersetzt durch zweiteilige Lösung:
+  - `mushroom-title-card` → Raumname schlicht
+  - `mushroom-chips-card` → Badges mit Live-Templates (Temp, Feuchte, Lux, CO₂, Lichter X/Y, Rollos X/Y, Klima-Soll)
+- Chips transparent via `card_mod` (`background: none`)
+- Chips nur gerendert wenn relevante Entities vorhanden
+
+---
+
+## [1.6.3] - 2026-03-13
+
+### ✨ Added — Spalten-Layout & dynamischer Header
+
+- Jede Domain-Kategorie (Licht, Rollos, Klima, Schalter, Sensoren…) bekommt eine eigene `vertical-stack`-Spalte
+- Spalten nur sichtbar wenn Geräte vorhanden
+- Header als `mushroom-template-card` mit Live-Templates (Temp, Feuchte, Lichter, Rollos)
+- Bis zu 3 Spalten nebeneinander via `horizontal-stack`
+
+---
+
 ## [1.3.0] - 2026-03-12
 
 ### 🔧 Fixed - CRITICAL RELEASE
@@ -29,20 +78,6 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 ### ✨ Changed
 
 - **Single-File-Architektur**: Alle Module in eine Datei konsolidiert
-  - Einfachere HACS-Installation (nur 1 Datei statt 12 Dateien)
-  - Keine separaten utils/views Ordner mehr
-  - Reduziert Probleme mit Pfad-Auflösung und Modul-Loading
-  - Bundle-Size: ~15KB gzip (vorher ~28KB durch separate Module)
-
-- **Verbesserte Fehlerbehandlung**:
-  - Detaillierte Error-Logs mit Stack Traces
-  - Fallback-Views bei Fehlern statt White-Screen
-  - Console-Logging mit Version-Info und Timing
-
-- **Code-Qualität**:
-  - Konsolidierte Helper-Funktionen
-  - Optimierte Daten-Sammler
-  - Reduzierte Code-Duplikation
 
 ### 📦 Installation
 
@@ -53,71 +88,6 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 4. "L30NEYN Dashboard Strategy" installieren
 5. Home Assistant neu starten
 
-**Manuell**:
-1. `dist/l30neyn-dashboard-strategy.js` herunterladen
-2. Nach `/config/www/community/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js` kopieren
-3. In `configuration.yaml` eintragen:
-   ```yaml
-   lovelace:
-     resources:
-       - url: /hacsfiles/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
-         type: module
-   ```
-4. Home Assistant neu starten
-
-**Dashboard konfigurieren**:
-```yaml
-title: Mein Dashboard
-strategy:
-  type: custom:l30neyn
-  show_welcome: true
-  show_areas: true
-  show_security: true
-  show_light_summary: true
-  show_battery_status: true
-  weather_entity: weather.home  # optional
-```
-
-### 🔄 Migration von v1.2.x
-
-**WICHTIG - BREAKING CHANGE**:
-
-❌ **ALT** (v1.2.x):
-```yaml
-strategy:
-  type: custom:dashboard-l30neyn  # ← FALSCH!
-```
-
-✅ **NEU** (v1.3.0):
-```yaml
-strategy:
-  type: custom:l30neyn  # ← RICHTIG!
-```
-
-**Migrations-Schritte**:
-1. HACS: "L30NEYN Dashboard Strategy" aktualisieren auf v1.3.0
-2. Dashboard YAML bearbeiten: `type: custom:dashboard-l30neyn` → `type: custom:l30neyn`
-3. Home Assistant neu starten
-4. Browser-Cache leeren (Strg+Shift+R / Cmd+Shift+R)
-5. Dashboard neu laden
-
-### 🐛 Bekannte Probleme
-
-- Keine bekannten Probleme mehr! 🎉
-- Alle kritischen Bugs aus v1.2.x wurden behoben
-
-### 📊 Performance
-
-**Benchmark** (10 Räume, 150 Entities):
-- Dashboard Generation: **35ms** (war 55ms in v1.2.x, **-36%**)
-- Single-File-Loading: **18ms** (war 85ms mit 12 separaten Modulen, **-79%**)
-- Memory Footprint: **2.1 MB** (war 3.4 MB, **-38%**)
-
-### 🙏 Credits
-
-- Danke an [@TheRealSimon42](https://github.com/TheRealSimon42) für das simon42-dashboard-strategy als Referenz
-- Danke an die Home Assistant Community für Debugging-Hilfe
-
 ---
 
 ## [1.2.3] - 2026-03-11
@@ -126,18 +96,6 @@ strategy:
 
 **NICHT VERWENDEN** - Upgrade auf v1.3.0!
 
-**Probleme in dieser Version**:
-- ❌ Strategy-Element wurde nicht registriert
-- ❌ Falscher Element-Name führte zu Timeout-Fehlern
-- ❌ Module wurden nicht korrekt geladen
-- ❌ Dashboard funktionierte nicht
-
----
-
-## [1.1.0] - 2026-03-11
-
-[Vorherige Changelog-Einträge unverändert...]
-
 ---
 
 ## Links
@@ -145,7 +103,6 @@ strategy:
 - **Repository**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy
 - **Issues**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues
 - **Releases**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases
-- **HACS**: https://hacs.xyz/
 
 ## Contributors
 
@@ -153,6 +110,10 @@ strategy:
 
 ---
 
+[1.6.6]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.5...v1.6.6
+[1.6.5]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.4...v1.6.5
+[1.6.4]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.3...v1.6.4
+[1.6.3]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.3.0...v1.6.3
 [1.3.0]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.1.0...v1.2.3
 [1.1.0]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.0.0...v1.1.0

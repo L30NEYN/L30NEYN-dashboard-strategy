@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.5
+ * @version 1.6.6
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.5';
+  const VERSION = '1.6.6';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -516,8 +516,9 @@
         }
 
         // ── Gesamtlayout: vertical-stack mit Header oben + Spalten darunter ─
-        // So steht der Header garantiert über ALLEN Spalten, unabhängig vom
-        // View-Grid des Dashboards.
+        // v1.6.6: card_mod erzwingt max-width: 100% auf dem äußeren vertical-stack,
+        // damit HA's default max-width (ca. 600px) nicht greift und der
+        // horizontal-stack die volle View-Breite für seine Spalten nutzen kann.
         const roomCard = {
           type: 'vertical-stack',
           cards: [
@@ -525,6 +526,14 @@
             Cards.roomChipsHeader(area, aOpts, roomEntities, hass),
             columnsBlock,
           ],
+          card_mod: {
+            style: `
+              ha-card {
+                max-width: 100% !important;
+                width: 100% !important;
+              }
+            `,
+          },
         };
 
         return {
