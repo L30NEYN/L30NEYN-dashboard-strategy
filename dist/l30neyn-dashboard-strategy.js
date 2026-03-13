@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.7
+ * @version 1.6.8
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.7';
+  const VERSION = '1.6.8';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -210,7 +210,6 @@
       return { type: 'markdown', content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
     },
 
-    // ── Raumtitel (schlicht) ────────────────────────────────────────────────
     roomTitle(area, aOpts) {
       return {
         type: 'custom:mushroom-title-card',
@@ -219,11 +218,9 @@
       };
     },
 
-    // ── Chip-Header ─────────────────────────────────────────────────────────
     roomChipsHeader(area, aOpts, roomEntities, hass) {
       const chips = [];
 
-      // 1. Raumname-Chip
       chips.push({
         type: 'template',
         icon: aOpts?.icon_override || area.icon || 'mdi:home',
@@ -232,7 +229,6 @@
         tap_action: { action: 'none' },
       });
 
-      // 2. Temperatur
       const tempId = aOpts?.primary_sensors?.temperature;
       const climId = (roomEntities.climate || [])[0];
       if (tempId && hass.states[tempId]) {
@@ -245,7 +241,6 @@
           tap_action: { action: 'more-info', entity: climId } });
       }
 
-      // 3. Luftfeuchte
       const humId = aOpts?.primary_sensors?.humidity;
       if (humId && hass.states[humId]) {
         chips.push({ type: 'template', icon: 'mdi:water-percent', icon_color: 'blue',
@@ -253,7 +248,6 @@
           tap_action: { action: 'more-info', entity: humId } });
       }
 
-      // 4. Helligkeit
       const luxId = aOpts?.primary_sensors?.illuminance;
       if (luxId && hass.states[luxId]) {
         chips.push({ type: 'template', icon: 'mdi:brightness-5', icon_color: 'yellow',
@@ -261,7 +255,6 @@
           tap_action: { action: 'more-info', entity: luxId } });
       }
 
-      // 5. CO₂
       const co2Id = aOpts?.primary_sensors?.co2;
       if (co2Id && hass.states[co2Id]) {
         chips.push({ type: 'template', icon: 'mdi:molecule-co2',
@@ -270,7 +263,6 @@
           tap_action: { action: 'more-info', entity: co2Id } });
       }
 
-      // 6. Lichter X/Y
       const lights = roomEntities.light || [];
       if (lights.length > 0) {
         const idList = lights.map(id => `'${id}'`).join(',');
@@ -280,7 +272,6 @@
           tap_action: { action: 'none' } });
       }
 
-      // 7. Rollos X/Y
       const covers = roomEntities.cover || [];
       if (covers.length > 0) {
         const idList = covers.map(id => `'${id}'`).join(',');
@@ -290,7 +281,6 @@
           tap_action: { action: 'none' } });
       }
 
-      // 8. Klima-Soll
       if (climId && hass.states[climId]) {
         chips.push({ type: 'template', icon: 'mdi:thermostat',
           icon_color: `{{ 'orange' if is_state('${climId}', 'heat') or is_state('${climId}', 'heat_cool') else 'blue' }}`,
@@ -314,7 +304,6 @@
       };
     },
 
-    // Gruppen-Schnelltasten
     groupControl(entityIds, domain) {
       const cfg = {
         light: [{ primary: 'Alle an',     icon: 'mdi:lightbulb-group',     icon_color: 'amber',     service: 'light.turn_on'  },
@@ -330,7 +319,6 @@
       })) };
     },
 
-    // Raum-Button auf Übersichtsseite
     roomButton(area, basePath, config) {
       const aOpts    = config?.areas_options?.[area.area_id] || {};
       const tempId   = aOpts?.primary_sensors?.temperature;
@@ -357,8 +345,17 @@
 
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
   const DOMAIN_TITLES = { light:'Beleuchtung', cover:'Rollos & Vorhänge', climate:'Klima', fan:'Ventilatoren', switch:'Schalter', media_player:'Medien', sensor:'Sensoren', binary_sensor:'Status', camera:'Kameras' };
-  const DOMAIN_ICONS  = { light:'mdi:lightbulb', cover:'mdi:window-shutter', climate:'mdi:thermometer', fan:'mdi:fan', switch:'mdi:toggle-switch', media_player:'mdi:speaker', sensor:'mdi:eye', binary_sensor:'mdi:motion-sensor', camera:'mdi:camera' };
-  const RELEVANT_SENSOR_CLASSES = new Set(['temperature','humidity','illuminance','motion','occupancy','door','window','battery']);
+  const DOMAIN_ICONS  = { light:'mdi:lightbulb', cover:'mdi:window-shutter', climate:'mdi:thermometer', fan:'mdi:fan', switch:'mdi:toggle-switch', media_player:'mdi:speaker', sensor:'mdi:eye', binary_sensor:'mdi:bell-ring', camera:'mdi:camera' };
+
+  // Relevante device_classes für sensor-Spalte (Messwerte)
+  const SENSOR_CLASSES = new Set(['temperature','humidity','illuminance','battery']);
+
+  // Relevante device_classes für binary_sensor-Spalte (Status/Ereignisse)
+  const BINARY_SENSOR_CLASSES = new Set([
+    'motion','occupancy','door','window','smoke','moisture',
+    'vibration','gas','battery','connectivity','plug','presence',
+  ]);
+
   const PRIMARY_SENSOR_CLASSES = [
     { key: 'temperature', label: 'Temperatur',  icon: 'mdi:thermometer',   unit: '°C' },
     { key: 'humidity',    label: 'Luftfeuchte', icon: 'mdi:water-percent', unit: '%'  },
@@ -369,13 +366,14 @@
 
   // ── Spalten-Konfiguration ──────────────────────────────────────────────────────
   const COLUMN_DEFS = [
-    { domains: ['light'],                    title: 'Beleuchtung',   icon: 'mdi:lightbulb'      },
-    { domains: ['cover'],                    title: 'Rollos',        icon: 'mdi:window-shutter' },
-    { domains: ['climate', 'fan'],           title: 'Klima',         icon: 'mdi:thermometer'    },
-    { domains: ['media_player'],             title: 'Medien',        icon: 'mdi:speaker'        },
-    { domains: ['switch'],                   title: 'Schalter',      icon: 'mdi:toggle-switch'  },
-    { domains: ['sensor','binary_sensor'],   title: 'Sensoren',      icon: 'mdi:eye'            },
-    { domains: ['camera'],                   title: 'Kameras',       icon: 'mdi:camera'         },
+    { domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
+    { domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
+    { domains: ['climate', 'fan'], title: 'Klima',       icon: 'mdi:thermometer'    },
+    { domains: ['media_player'],   title: 'Medien',      icon: 'mdi:speaker'        },
+    { domains: ['switch'],         title: 'Schalter',    icon: 'mdi:toggle-switch'  },
+    { domains: ['sensor'],         title: 'Sensoren',    icon: 'mdi:eye'            },
+    { domains: ['binary_sensor'],  title: 'Status',      icon: 'mdi:bell-ring'      },
+    { domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
   ];
 
   // Baut eine einzelne Domain-Spalte als vertical-stack
@@ -400,15 +398,19 @@
         ids.forEach(id => colCards.push(Cards.fan(id)));
       } else if (domain === 'media_player') {
         ids.forEach(id => colCards.push(Cards.mediaPlayer(id)));
-      } else if (domain === 'sensor' || domain === 'binary_sensor') {
-        const relevant = ids.filter(id => RELEVANT_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
+      } else if (domain === 'sensor') {
+        // Nur klassische Messwert-Sensoren
+        const relevant = ids.filter(id => SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
+        relevant.forEach(id => colCards.push(Cards.entity(id)));
+      } else if (domain === 'binary_sensor') {
+        // Status-Sensoren: Bewegung, Tür, Fenster, Rauch, etc.
+        const relevant = ids.filter(id => BINARY_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
         relevant.forEach(id => colCards.push(Cards.entity(id)));
       } else {
         ids.forEach(id => colCards.push(Cards.entity(id)));
       }
     }
 
-    // Spalte nur rendern wenn sie mehr als den Titel hat
     if (colCards.length <= 1) return null;
     return { type: 'vertical-stack', cards: colCards };
   };
@@ -494,8 +496,11 @@
         for (const colDef of COLUMN_DEFS) {
           const hasContent = colDef.domains.some(d => {
             if (!roomEntities[d]?.length) return false;
-            if (d === 'sensor' || d === 'binary_sensor') {
-              return roomEntities[d].some(id => RELEVANT_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
+            if (d === 'sensor') {
+              return roomEntities[d].some(id => SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
+            }
+            if (d === 'binary_sensor') {
+              return roomEntities[d].some(id => BINARY_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
             }
             return true;
           });
@@ -514,11 +519,6 @@
           columnsBlock = { type: 'horizontal-stack', cards: populatedCols };
         }
 
-        // ── Gesamtlayout ────────────────────────────────────────────────────
-        // v1.6.7: panel: true auf dem View-Objekt → HA rendert die einzige
-        // Card ohne das normale View-Grid und seine ~600px max-width.
-        // card_mod auf vertical-stack hatte keinen Effekt, da hui-vertical-stack-card
-        // intern keine ha-card-Instanz rendert.
         const roomCard = {
           type: 'vertical-stack',
           cards: [
