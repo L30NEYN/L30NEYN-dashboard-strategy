@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.0
+ * @version 1.6.1
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.6.1';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -240,6 +240,7 @@
 
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
   const DOMAIN_TITLES = { light:'Beleuchtung', cover:'Rollos & Vorh\u00e4nge', climate:'Klima', fan:'Ventilatoren', switch:'Schalter', media_player:'Medien', sensor:'Sensoren', binary_sensor:'Status', camera:'Kameras' };
+  const DOMAIN_ICONS  = { light:'mdi:lightbulb', cover:'mdi:window-shutter', climate:'mdi:thermometer', fan:'mdi:fan', switch:'mdi:toggle-switch', media_player:'mdi:speaker', sensor:'mdi:eye', binary_sensor:'mdi:motion-sensor', camera:'mdi:camera' };
   const RELEVANT_SENSOR_CLASSES = new Set(['temperature','humidity','illuminance','motion','occupancy','door','window','battery']);
 
   const OverviewView = {
@@ -372,49 +373,243 @@
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MODUL 10 — CONFIG EDITOR ("Dashboard bearbeiten"-Panel)
-  //
-  // Wird von HA aufgerufen wenn der Nutzer auf "Bearbeiten" klickt.
-  // Implementiert getConfigElement() auf der Strategy-Klasse.
-  // Das Element ist ein vanilla Custom Element (kein LitElement noetig).
   // ═══════════════════════════════════════════════════════════════════════════
 
   const EDITOR_STYLES = `
-    :host { display: block; font-family: var(--primary-font-family, sans-serif); }
-    .section { font-size: 14px; font-weight: 600; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--divider-color); }
-    .section:first-of-type { margin-top: 4px; }
-    .row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--divider-color, #e0e0e0); }
-    .row:last-child { border-bottom: none; }
-    .row label { font-size: 14px; color: var(--primary-text-color); flex: 1; cursor: pointer; }
-    .row .sub { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
+    :host {
+      display: block;
+      font-family: var(--primary-font-family, sans-serif);
+      color: var(--primary-text-color);
+    }
+
+    /* ── Sektions-Überschriften ───────────────────────────── */
+    .section-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--secondary-text-color);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 24px 0 8px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--primary-color, #41BDF5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-header:first-of-type { margin-top: 0; }
+    .section-header ha-icon { --mdi-icon-size: 16px; color: var(--primary-color, #41BDF5); }
+
+    /* ── Allgemein-Zeilen ─────────────────────────────────── */
+    .general-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      background: var(--secondary-background-color);
+      transition: background 0.15s;
+    }
+    .general-row:hover { background: var(--table-row-alternative-background-color, rgba(0,0,0,0.05)); }
+    .general-row label { font-size: 14px; flex: 1; cursor: pointer; }
+    .general-row .sub  { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
     ha-switch { flex-shrink: 0; margin-left: 12px; }
-    .area-block { background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
-    .area-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-    .area-title ha-icon { --mdi-icon-size: 18px; color: var(--secondary-text-color); }
-    .domain-section { margin-top: 8px; }
-    .domain-label { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); text-transform: uppercase; margin-bottom: 4px; }
-    .entity-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; }
-    .entity-id { font-size: 13px; font-family: monospace; color: var(--primary-text-color); }
-    .loading { color: var(--secondary-text-color); font-size: 14px; padding: 12px 0; }
-    .version { font-size: 11px; color: var(--disabled-text-color); text-align: right; margin-top: 16px; }
+
+    /* ── Raum-Block ───────────────────────────────────────── */
+    .area-card {
+      border: 1px solid var(--divider-color);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      background: var(--card-background-color);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      transition: box-shadow 0.2s;
+    }
+    .area-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+
+    /* Klickbarer Header zum Ein-/Ausklappen */
+    .area-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+      background: var(--secondary-background-color);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s, background 0.15s;
+    }
+    .area-header:hover { background: var(--table-row-alternative-background-color, rgba(0,0,0,0.05)); }
+    .area-header.open  { border-bottom-color: var(--divider-color); }
+
+    .area-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .area-header-left ha-icon { --mdi-icon-size: 20px; color: var(--secondary-text-color); }
+
+    .area-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Badge: Anzahl ausgeblendeter Entities */
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--error-color, #db4437);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 7px;
+      min-width: 18px;
+      text-align: center;
+      display: none;
+    }
+    .badge.visible { display: inline-block; }
+
+    .chevron {
+      --mdi-icon-size: 20px;
+      color: var(--secondary-text-color);
+      transition: transform 0.25s;
+    }
+    .chevron.open { transform: rotate(180deg); }
+
+    /* Inhalt des Raum-Blocks */
+    .area-content {
+      padding: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.2s;
+    }
+    .area-content.open {
+      max-height: 2000px;
+      padding: 8px 0;
+    }
+
+    /* ── Domain-Gruppe ────────────────────────────────────── */
+    .domain-block {
+      padding: 6px 16px 10px;
+    }
+
+    .domain-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--divider-color);
+    }
+
+    .domain-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--secondary-text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .domain-header-left ha-icon { --mdi-icon-size: 14px; }
+
+    /* "Alle" Toggle für eine ganze Domain */
+    .domain-all-btn {
+      font-size: 11px;
+      color: var(--primary-color, #41BDF5);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--primary-color, #41BDF5);
+      background: transparent;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .domain-all-btn:hover {
+      background: var(--primary-color, #41BDF5);
+      color: #fff;
+    }
+
+    /* ── Entity-Zeile ─────────────────────────────────────── */
+    .entity-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 0;
+    }
+    .entity-row + .entity-row {
+      border-top: 1px solid var(--divider-color);
+    }
+    .entity-label {
+      flex: 1;
+      min-width: 0;
+    }
+    .entity-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .entity-id-small {
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--secondary-text-color);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Lade-Placeholder ─────────────────────────────────── */
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--secondary-text-color);
+      font-size: 14px;
+      padding: 16px 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--divider-color);
+      border-top-color: var(--primary-color, #41BDF5);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    .editor-footer {
+      font-size: 11px;
+      color: var(--disabled-text-color);
+      text-align: right;
+      margin-top: 20px;
+      padding-top: 8px;
+      border-top: 1px solid var(--divider-color);
+    }
   `;
 
   class L30NEYNDashboardStrategyEditor extends HTMLElement {
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-      this._config  = {};
-      this._hass    = null;
+      this._config   = {};
+      this._hass     = null;
       this._registry = null;
       this._loading  = true;
+      // Merkt sich welche Raum-Akkordeons offen sind (area_id → bool)
+      this._openAreas = new Set();
     }
 
-    // HA setzt hass nach dem Einhaengen
     set hass(hass) {
       this._hass = hass;
       if (this._loading && hass) this._loadRegistry();
     }
 
-    // HA setzt setConfig mit der aktuellen Strategy-Config
     setConfig(config) {
       this._config = config ? JSON.parse(JSON.stringify(config)) : {};
       this._render();
@@ -424,8 +619,7 @@
       this._loading = true;
       this._render();
       try {
-        const data = await loadRegistryData(this._hass);
-        this._registry = data;
+        this._registry = await loadRegistryData(this._hass);
       } catch (e) {
         this._registry = { areas: [], devices: [], entities: [], source: 'error' };
       }
@@ -433,88 +627,159 @@
       this._render();
     }
 
-    // Aendert einen Top-Level-Boolean in der Config und feuert config-changed
     _setConfigValue(key, value) {
       this._config = { ...this._config, [key]: value };
       this._fireConfigChanged();
+      // kein _render() nötig – HA re-setzt setConfig nach config-changed
     }
 
-    // Setzt ob eine Entity in einem Raum ausgeblendet ist
     _toggleEntityHidden(areaId, domain, entityId, hidden) {
       const cfg = JSON.parse(JSON.stringify(this._config));
-      if (!cfg.areas_options)                                      cfg.areas_options = {};
-      if (!cfg.areas_options[areaId])                             cfg.areas_options[areaId] = {};
-      if (!cfg.areas_options[areaId].groups_options)              cfg.areas_options[areaId].groups_options = {};
-      if (!cfg.areas_options[areaId].groups_options[domain])      cfg.areas_options[areaId].groups_options[domain] = {};
-      if (!cfg.areas_options[areaId].groups_options[domain].hidden) cfg.areas_options[areaId].groups_options[domain].hidden = [];
+      cfg.areas_options                                             ??= {};
+      cfg.areas_options[areaId]                                    ??= {};
+      cfg.areas_options[areaId].groups_options                     ??= {};
+      cfg.areas_options[areaId].groups_options[domain]             ??= {};
+      cfg.areas_options[areaId].groups_options[domain].hidden      ??= [];
+      const list = cfg.areas_options[areaId].groups_options[domain].hidden;
+      const idx  = list.indexOf(entityId);
+      if (hidden  && idx === -1) list.push(entityId);
+      if (!hidden && idx !== -1) list.splice(idx, 1);
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
 
-      const hiddenList = cfg.areas_options[areaId].groups_options[domain].hidden;
-      const idx = hiddenList.indexOf(entityId);
-      if (hidden && idx === -1)  hiddenList.push(entityId);
-      if (!hidden && idx !== -1) hiddenList.splice(idx, 1);
-
+    // Alle Entities einer Domain auf einmal ein-/ausblenden
+    _toggleDomainAll(areaId, domain, allEntityIds, hide) {
+      const cfg = JSON.parse(JSON.stringify(this._config));
+      cfg.areas_options                                        ??= {};
+      cfg.areas_options[areaId]                               ??= {};
+      cfg.areas_options[areaId].groups_options                ??= {};
+      cfg.areas_options[areaId].groups_options[domain]        ??= {};
+      cfg.areas_options[areaId].groups_options[domain].hidden  = hide ? [...allEntityIds] : [];
       this._config = cfg;
       this._render();
       this._fireConfigChanged();
     }
 
     _fireConfigChanged() {
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+      this.dispatchEvent(new CustomEvent('config-changed', {
+        detail: { config: this._config }, bubbles: true, composed: true,
+      }));
+    }
+
+    _toggleArea(areaId) {
+      if (this._openAreas.has(areaId)) this._openAreas.delete(areaId);
+      else                             this._openAreas.add(areaId);
+      // Nur DOM-Updates, kein komplettes Re-Render
+      const shadow = this.shadowRoot;
+      const content = shadow.querySelector(`.area-content[data-area="${areaId}"]`);
+      const header  = shadow.querySelector(`.area-header[data-area="${areaId}"]`);
+      const chevron = header?.querySelector('.chevron');
+      const isOpen  = this._openAreas.has(areaId);
+      content?.classList.toggle('open', isOpen);
+      header ?.classList.toggle('open', isOpen);
+      chevron?.classList.toggle('open', isOpen);
     }
 
     _render() {
       const shadow = this.shadowRoot;
-      const cfg = this._config;
+      const cfg    = this._config;
 
-      // Schalter-Werte (default: true wenn nicht gesetzt)
-      const showAreas    = cfg.show_areas           !== false;
-      const showSecurity = cfg.show_security        !== false;
-      const showBattery  = cfg.show_battery_status  !== false;
+      const showAreas    = cfg.show_areas          !== false;
+      const showSecurity = cfg.show_security       !== false;
+      const showBattery  = cfg.show_battery_status !== false;
 
+      // ── Räume-HTML ────────────────────────────────────────
       let areasHtml = '';
-
       if (this._loading) {
-        areasHtml = '<div class="loading">Lade Ger\u00e4te und R\u00e4ume\u2026</div>';
+        areasHtml = `<div class="loading"><div class="spinner"></div>Lade R\u00e4ume und Ger\u00e4te\u2026</div>`;
       } else if (this._registry) {
         const { areas = [], entities = [], devices = [] } = this._registry;
-        const filteredAreas = R.filterAreas(areas);
-
-        if (!filteredAreas.length) {
+        const filtered = R.filterAreas(areas);
+        if (!filtered.length) {
           areasHtml = '<div class="loading">Keine Bereiche gefunden.</div>';
         } else {
-          areasHtml = filteredAreas.map(area => {
-            // Alle Entities dieses Raums (ohne hidden-Filter, damit man sie ein/ausblenden kann)
-            const allRoomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
-            const domainBlocks = DOMAIN_ORDER.map(domain => {
-              if (!allRoomEntities[domain]?.length) return '';
-              const hiddenNow = R.getHiddenEntities(cfg, area.area_id, domain);
-              const entityRows = allRoomEntities[domain].map(id => {
+          areasHtml = filtered.map(area => {
+            const aId       = area.area_id;
+            const isOpen    = this._openAreas.has(aId);
+            // Alle verfügbaren Entities OHNE hidden-Filter (damit man togglen kann)
+            const allByDomain = {};
+            const rawEntities = R.filterAvailable(R.filterByLabels(
+              R.filterByArea(entities, aId, R.buildDeviceAreaMap(devices))
+            ));
+            for (const [dom, ents] of R.groupByDomain(rawEntities)) {
+              allByDomain[dom] = ents.map(e => e.entity_id);
+            }
+
+            // Anzahl ausgeblendeter Entities → Badge
+            let hiddenCount = 0;
+            for (const dom of DOMAIN_ORDER) {
+              if (!allByDomain[dom]) continue;
+              hiddenCount += R.getHiddenEntities(cfg, aId, dom).length;
+            }
+
+            // Domain-Blöcke
+            const domainBlocks = DOMAIN_ORDER.map(dom => {
+              if (!allByDomain[dom]?.length) return '';
+              const hiddenNow   = R.getHiddenEntities(cfg, aId, dom);
+              const allHidden   = hiddenNow.length === allByDomain[dom].length;
+              const allVisible  = hiddenNow.length === 0;
+              const btnLabel    = allHidden ? 'Alle einblenden' : 'Alle ausblenden';
+
+              const entityRows = allByDomain[dom].map(id => {
                 const isHidden = hiddenNow.includes(id);
+                // Friendly name aus Registry wenn vorhanden
+                const entObj   = entities.find(e => e.entity_id === id);
+                const fname    = entObj?.name || entObj?.original_name || '';
                 return `
                   <div class="entity-row">
-                    <span class="entity-id">${id}</span>
+                    <div class="entity-label">
+                      ${fname ? `<div class="entity-name">${fname}</div>` : ''}
+                      <div class="entity-id-small">${id}</div>
+                    </div>
                     <ha-switch
-                      data-area="${area.area_id}"
-                      data-domain="${domain}"
+                      data-area="${aId}"
+                      data-domain="${dom}"
                       data-entity="${id}"
                       ${!isHidden ? 'checked' : ''}
                     ></ha-switch>
                   </div>`;
               }).join('');
+
               return `
-                <div class="domain-section">
-                  <div class="domain-label">${DOMAIN_TITLES[domain] || domain}</div>
+                <div class="domain-block">
+                  <div class="domain-header">
+                    <div class="domain-header-left">
+                      <ha-icon icon="${DOMAIN_ICONS[dom] || 'mdi:dots-horizontal'}"></ha-icon>
+                      ${DOMAIN_TITLES[dom] || dom}
+                    </div>
+                    <button class="domain-all-btn"
+                      data-area="${aId}"
+                      data-domain="${dom}"
+                      data-hide="${!allHidden}"
+                      data-entities="${allByDomain[dom].join(',')}"
+                    >${btnLabel}</button>
+                  </div>
                   ${entityRows}
                 </div>`;
             }).join('');
 
             return `
-              <div class="area-block">
-                <div class="area-title">
-                  <ha-icon icon="${area.icon || 'mdi:home'}"></ha-icon>
-                  ${area.name}
+              <div class="area-card">
+                <div class="area-header${isOpen ? ' open' : ''}" data-area="${aId}">
+                  <div class="area-header-left">
+                    <ha-icon icon="${area.icon || 'mdi:home'}"></ha-icon>
+                    ${area.name}
+                  </div>
+                  <div class="area-header-right">
+                    <span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span>
+                    <ha-icon class="chevron${isOpen ? ' open' : ''}" icon="mdi:chevron-down"></ha-icon>
+                  </div>
                 </div>
-                ${domainBlocks || '<div class="loading">Keine Ger\u00e4te in diesem Raum.</div>'}
+                <div class="area-content${isOpen ? ' open' : ''}" data-area="${aId}">
+                  ${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Ger\u00e4te in diesem Raum.</div>'}
+                </div>
               </div>`;
           }).join('');
         }
@@ -523,45 +788,65 @@
       shadow.innerHTML = `
         <style>${EDITOR_STYLES}</style>
 
-        <div class="section">Allgemein</div>
-        <div class="row">
+        <div class="section-header">
+          <ha-icon icon="mdi:tune"></ha-icon>
+          Allgemein
+        </div>
+
+        <div class="general-row">
           <label>
             Raum-\u00dcbersicht anzeigen
             <span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span>
           </label>
           <ha-switch id="sw-areas" ${showAreas ? 'checked' : ''}></ha-switch>
         </div>
-        <div class="row">
+        <div class="general-row">
           <label>
             Sicherheits-Widget anzeigen
             <span class="sub">Schl\u00f6sser, T\u00fcren, Fenster, Alarm</span>
           </label>
           <ha-switch id="sw-security" ${showSecurity ? 'checked' : ''}></ha-switch>
         </div>
-        <div class="row">
+        <div class="general-row">
           <label>
             Batterie-Warnungen anzeigen
-            <span class="sub">Geraete mit niedrigem Akkustand</span>
+            <span class="sub">Ger\u00e4te mit niedrigem Akkustand</span>
           </label>
           <ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch>
         </div>
 
-        <div class="section">Ger\u00e4te pro Raum</div>
+        <div class="section-header" style="margin-top:28px">
+          <ha-icon icon="mdi:home-city"></ha-icon>
+          Ger\u00e4te pro Raum
+        </div>
         <div id="areas-container">${areasHtml}</div>
 
-        <div class="version">L30NEYN Dashboard Strategy v${VERSION}</div>
+        <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
       `;
 
-      // Events binden — Allgemein-Schalter
+      // ── Events: Allgemein ──────────────────────────────────
       shadow.getElementById('sw-areas')   ?.addEventListener('change', e => this._setConfigValue('show_areas',          e.target.checked));
-      shadow.getElementById('sw-security') ?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
-      shadow.getElementById('sw-battery')  ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
+      shadow.getElementById('sw-security')?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
+      shadow.getElementById('sw-battery') ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
 
-      // Events binden — Entity-Toggles
+      // ── Events: Raum-Akkordeon ─────────────────────────────
+      shadow.querySelectorAll('.area-header').forEach(header => {
+        header.addEventListener('click', () => this._toggleArea(header.dataset.area));
+      });
+
+      // ── Events: Alle-Toggle (Domain) ───────────────────────
+      shadow.querySelectorAll('.domain-all-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const { area, domain, hide, entities: ents } = btn.dataset;
+          this._toggleDomainAll(area, domain, ents.split(','), hide === 'true');
+        });
+      });
+
+      // ── Events: Entity-Toggles ─────────────────────────────
       shadow.querySelectorAll('ha-switch[data-entity]').forEach(sw => {
         sw.addEventListener('change', e => {
           const { area, domain, entity } = e.target.dataset;
-          // checked = SICHTBAR, !checked = AUSGEBLENDET
           this._toggleEntityHidden(area, domain, entity, !e.target.checked);
         });
       });
@@ -580,12 +865,11 @@
           loadRegistryData(hass),
           DashboardPathResolver.resolve(hass, config),
         ]);
-        console.info(`[L30NEYN] basePath: '${basePath}'`);
         if (registryData.source === 'error') {
           return { views: [{ title: 'Fehler', path: 'overview', icon: 'mdi:alert-circle', cards: [Cards.error('Registry-Daten konnten nicht geladen werden', registryData.error)] }] };
         }
         const registry = { areas: registryData.areas, devices: registryData.devices, entities: registryData.entities };
-        const views = [];
+        const views    = [];
         views.push(OverviewView.generate(hass, config, registry, basePath));
         for (const area of registryData.areas) {
           if (!area?.area_id || area.labels?.includes('no_dboard')) continue;
@@ -600,20 +884,12 @@
       }
     }
 
-    // HA ruft diese statische Methode auf um den Editor zu erhalten
     static getConfigElement() {
       return document.createElement('l30neyn-dashboard-strategy-editor');
     }
 
-    // Liefert eine leere Default-Config fuer neue Dashboards
     static getStubConfig() {
-      return {
-        show_areas: true,
-        show_security: true,
-        show_battery_status: true,
-        navigation: {},
-        areas_options: {},
-      };
+      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {} };
     }
   }
 
@@ -626,7 +902,7 @@
     catch (e) { if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Registration failed:', name, e); }
   };
 
-  register('l30neyn-dashboard-strategy-editor',    L30NEYNDashboardStrategyEditor);
+  register('l30neyn-dashboard-strategy-editor',      L30NEYNDashboardStrategyEditor);
   register('ll-strategy-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
 
   console.info(
