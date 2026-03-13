@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.9
+ * @version 1.7.0
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.9';
+  const VERSION = '1.7.0';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -130,6 +130,10 @@
     },
     getHiddenEntities: (config, areaId, domain) =>
       config?.areas_options?.[areaId]?.groups_options?.[domain]?.hidden || [],
+
+    // Räume ausblenden: areas_options.[id].hidden = true
+    isAreaHidden: (config, areaId) => config?.areas_options?.[areaId]?.hidden === true,
+
     filterAreas: (areas) => (areas || []).filter(a => a && !(a.labels?.includes('no_dboard'))),
 
     // Sortiert Bereiche gemäß area_order config (nicht konfigurierte kommen alphabetisch danach)
@@ -190,12 +194,23 @@
       });
       return { locks, doors, windows, alarm };
     },
-    collectBatteries(hass, entities) {
-      const bats = R.filterAvailable(R.filterByLabels(entities.filter(e => {
-        if (!e?.entity_id?.startsWith('sensor.')) return false;
-        const s = hass.states[e.entity_id]; if (!s) return false;
-        return s.attributes?.device_class === 'battery';
-      })));
+    // NEU: Batterie-Entities aus expliziter Liste oder Autodetect
+    collectBatteries(hass, entities, config) {
+      const explicitList = config?.battery_entities;
+      let bats;
+      if (explicitList?.length) {
+        // Explizit konfigurierte Entities
+        bats = explicitList
+          .filter(id => hass.states[id])
+          .map(id => ({ entity_id: id }));
+      } else {
+        // Autodetect: alle sensor.* mit device_class battery
+        bats = R.filterAvailable(R.filterByLabels(entities.filter(e => {
+          if (!e?.entity_id?.startsWith('sensor.')) return false;
+          const s = hass.states[e.entity_id]; if (!s) return false;
+          return s.attributes?.device_class === 'battery';
+        })));
+      }
       const critical = [], low = [];
       bats.forEach(e => {
         const s = hass.states[e.entity_id]; if (!s) return;
@@ -333,22 +348,108 @@
       })) };
     },
 
-    roomButton(area, basePath, config) {
+    // NEU: Raumkarte mit Quick-Action-Buttons (Licht + Rollo)
+    roomButton(area, basePath, config, roomEntities) {
       const aOpts    = config?.areas_options?.[area.area_id] || {};
       const tempId   = aOpts?.primary_sensors?.temperature;
+      const humId    = aOpts?.primary_sensors?.humidity;
       const lightInd = aOpts?.light_indicator;
+      const lights   = roomEntities?.light || [];
+      const covers   = roomEntities?.cover || [];
+
+      // Sekundäre Zeile: Temp + Feuchte
+      let secondary = '';
+      if (tempId) {
+        secondary = `{{ states('${tempId}') | float(0) | round(1) }} °C`;
+        if (humId) secondary += ` · {{ states('${humId}') | float(0) | round(0) }} %`;
+      } else if (aOpts?.subtitle) {
+        secondary = aOpts.subtitle;
+      }
+
+      const mainCard = {
+        type: 'custom:mushroom-template-card',
+        primary: aOpts.title_override || area.name,
+        icon: aOpts.icon_override || area.icon || 'mdi:home',
+        icon_color: lightInd
+          ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'blue-grey' }}`
+          : (lights.length > 0
+            ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
+            : 'blue-grey'),
+        secondary,
+        tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
+        hold_action: { action: 'none' },
+        fill_container: false,
+      };
+
+      // Quick-Action-Chips: nur wenn Geräte vorhanden
+      const chips = [];
+
+      if (lights.length > 0) {
+        const idList = lights.map(id => `'${id}'`).join(',');
+        chips.push({
+          type: 'template',
+          icon: `{{ 'mdi:lightbulb' if [${idList}] | select('is_state','on') | list | count > 0 else 'mdi:lightbulb-off' }}`,
+          icon_color: `{{ 'amber' if [${idList}] | select('is_state','on') | list | count > 0 else 'grey' }}`,
+          tap_action: {
+            action: 'call-service',
+            service: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
+            service_data: { entity_id: lights },
+          },
+        });
+      }
+
+      if (covers.length > 0) {
+        const idList = covers.map(id => `'${id}'`).join(',');
+        chips.push({
+          type: 'template',
+          icon: `{{ 'mdi:window-shutter-open' if [${idList}] | select('is_state','open') | list | count > 0 else 'mdi:window-shutter' }}`,
+          icon_color: `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'grey' }}`,
+          tap_action: {
+            action: 'call-service',
+            service: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
+            service_data: { entity_id: covers },
+          },
+        });
+      }
+
+      if (!chips.length) return mainCard;
+
+      // Karte + Chips nebeneinander
+      const chipsCard = {
+        type: 'custom:mushroom-chips-card',
+        chips,
+        alignment: 'end',
+        card_mod: {
+          style: `
+            ha-card {
+              background: none !important;
+              box-shadow: none !important;
+              padding: 0 !important;
+              --chip-spacing: 4px;
+            }
+          `,
+        },
+      };
+
       return {
         type: 'custom:mushroom-template-card',
         primary: aOpts.title_override || area.name,
         icon: aOpts.icon_override || area.icon || 'mdi:home',
         icon_color: lightInd
-          ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'grey' }}`
-          : 'grey',
-        secondary: tempId
-          ? `{{ states('${tempId}') | float(0) | round(1) }} °C`
-          : (aOpts?.subtitle || ''),
+          ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'blue-grey' }}`
+          : (lights.length > 0
+            ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
+            : 'blue-grey'),
+        secondary,
         tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
+        hold_action: { action: 'none' },
         fill_container: false,
+        badge_icon: chips.length > 0 ? undefined : undefined,
+        // Chips werden als separate Karte rechts platziert — daher wrapper:
+        _chips: chipsCard,
+        _chipsRaw: chips,
+        _lightsIds: lights,
+        _coversIds: covers,
       };
     },
   };
@@ -379,7 +480,6 @@
   ];
 
   // ── Spalten-Basis-Konfiguration ────────────────────────────────────────────────
-  // Schlüssel = erster domain-Wert (zur Identifikation in column_order)
   const COLUMN_DEFS = [
     { key: 'light',         domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
     { key: 'cover',         domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
@@ -391,19 +491,16 @@
     { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
   ];
 
-  // Gibt COLUMN_DEFS in der durch config.column_order gewünschten Reihenfolge zurück
   const resolveColumnOrder = (config) => {
     const order = config?.column_order;
     if (!order?.length) return COLUMN_DEFS;
     const map = new Map(COLUMN_DEFS.map(c => [c.key, c]));
     const sorted = [];
     for (const key of order) { if (map.has(key)) sorted.push(map.get(key)); }
-    // Nicht konfigurierte Spalten hinten anhängen
     for (const col of COLUMN_DEFS) { if (!sorted.includes(col)) sorted.push(col); }
     return sorted;
   };
 
-  // Baut eine einzelne Domain-Spalte als vertical-stack
   const buildColumn = (colDef, roomEntities, hass) => {
     const colCards = [];
 
@@ -457,20 +554,56 @@
 
         if (config.show_areas !== false) {
           const deviceAreaMap = R.buildDeviceAreaMap(devices);
-          const filteredAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
+          // Ausgeblendete Räume herausfiltern
+          const filteredAreas = R.sortAreas(
+            R.filterAreas(areas).filter(a => !R.isAreaHidden(config, a.area_id)),
+            config.area_order
+          );
           if (filteredAreas.length) {
-            const areaButtons = filteredAreas.map(area => {
+            const areaCards = [];
+            for (const area of filteredAreas) {
               const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
-              const lights = ae.filter(e => e?.entity_id?.startsWith('light.'));
+              const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+              const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
               const aOpts  = config?.areas_options?.[area.area_id] || {};
-              const lightIndicator = aOpts?.light_indicator || lights[0]?.entity_id;
+              const lightIndicator = aOpts?.light_indicator || lights[0];
               const enrichedConfig = {
                 ...config,
                 areas_options: { ...config?.areas_options, [area.area_id]: { ...aOpts, light_indicator: lightIndicator } },
               };
-              return Cards.roomButton(area, basePath, enrichedConfig);
-            });
-            cards.push({ type: 'grid', cards: areaButtons, columns: 3, square: false });
+              const roomEntities = { light: lights, cover: covers };
+              const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+
+              // Wenn Quick-Actions vorhanden: Karte + Chips in vertical-stack
+              if (btn._chipsRaw?.length) {
+                const templateCard = {
+                  type: 'custom:mushroom-template-card',
+                  primary: btn.primary,
+                  icon: btn.icon,
+                  icon_color: btn.icon_color,
+                  secondary: btn.secondary,
+                  tap_action: btn.tap_action,
+                  hold_action: btn.hold_action,
+                  fill_container: false,
+                };
+                const chipsCard = {
+                  type: 'custom:mushroom-chips-card',
+                  chips: btn._chipsRaw,
+                  alignment: 'end',
+                  card_mod: {
+                    style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+                  },
+                };
+                areaCards.push({
+                  type: 'vertical-stack',
+                  cards: [templateCard, chipsCard],
+                });
+              } else {
+                const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+                areaCards.push(cleanBtn);
+              }
+            }
+            cards.push({ type: 'grid', cards: areaCards, columns: 2, square: false });
           }
         }
 
@@ -488,7 +621,7 @@
         }
 
         if (config.show_battery_status !== false) {
-          const bats = Collectors.collectBatteries(hass, entities);
+          const bats = Collectors.collectBatteries(hass, entities, config);
           if (bats.critical.length || bats.low.length) {
             cards.push(Cards.title('Batterie-Warnung'));
             bats.critical.forEach(id => cards.push(Cards.entity(id, { icon_color: 'red' })));
@@ -516,7 +649,6 @@
         const aOpts        = config?.areas_options?.[areaId] || {};
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
 
-        // ── Spalten aufbauen (mit konfigurierbarer Reihenfolge) ─────────────
         const orderedCols   = resolveColumnOrder(config);
         const populatedCols = [];
         for (const colDef of orderedCols) {
@@ -577,12 +709,12 @@
           '', '```yaml',
           'strategy:', '  type: custom:l30neyn-dashboard-strategy',
           '  navigation:', `    dashboard_url_path: ${urlPath}`,
-          '  # Spaltenreihenfolge (Keys: light, cover, climate, media_player, switch, sensor, binary_sensor, camera)',
           '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]',
-          '  # Raumreihenfolge (area_ids aus HA)',
           '  area_order: []',
-          '  areas_options:', '    <area_id>:', '      title_override: "Mein Raum"',
-          '      icon_override: mdi:sofa',
+          '  # Räume ausblenden:',
+          '  areas_options:', '    <area_id>:', '      hidden: true',
+          '  # Batterie-Entities manuell festlegen (leer = Autodetect):',
+          '  battery_entities: []',
           '```',
         ].join('\n') });
         const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
@@ -629,7 +761,6 @@
     .general-row .sub { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
     ha-switch { flex-shrink: 0; margin-left: 12px; }
 
-    /* ── Sortier-Reihen ── */
     .sort-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
     .sort-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--secondary-background-color); border-radius: 8px; border: 1px solid var(--divider-color); }
     .sort-row-label { flex: 1; font-size: 13px; display: flex; align-items: center; gap: 6px; }
@@ -648,6 +779,8 @@
     .area-header-right { display: flex; align-items: center; gap: 6px; }
     .badge { font-size: 11px; font-weight: 700; background: var(--error-color, #db4437); color: #fff; border-radius: 10px; padding: 1px 7px; display: none; }
     .badge.visible { display: inline-block; }
+    /* NEU: Badge für ausgeblendeten Raum */
+    .badge-hidden { font-size: 11px; font-weight: 700; background: var(--warning-color, #ff9800); color: #fff; border-radius: 10px; padding: 1px 7px; }
     .area-sort-btn { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 2px 4px; border-radius: 4px; font-size: 15px; line-height: 1; transition: color 0.15s; }
     .area-sort-btn:hover { color: var(--primary-color, #41BDF5); }
     .area-sort-btn:disabled { opacity: 0.2; cursor: default; }
@@ -684,6 +817,17 @@
     .opt-input { width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); font-size: 13px; font-family: inherit; box-sizing: border-box; }
     .opt-input:focus { outline: none; border-color: var(--primary-color, #41BDF5); }
     .opt-hint { font-size: 11px; color: var(--secondary-text-color); margin-top: 3px; }
+
+    /* NEU: Batterie-Entity-Liste */
+    .battery-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+    .battery-entity-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--secondary-background-color); border-radius: 6px; border: 1px solid var(--divider-color); font-size: 12px; font-family: monospace; }
+    .battery-entity-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .battery-remove-btn { background: none; border: none; color: var(--error-color, #db4437); cursor: pointer; font-size: 16px; padding: 0 2px; line-height: 1; }
+    .battery-remove-btn:hover { opacity: 0.7; }
+    .battery-add-row { display: flex; gap: 6px; margin-top: 6px; }
+    .battery-add-select { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); font-size: 12px; font-family: monospace; }
+    .battery-add-btn { padding: 6px 12px; border-radius: 6px; border: none; background: var(--primary-color, #41BDF5); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .battery-add-btn:hover { opacity: 0.85; }
 
     .loading { display: flex; align-items: center; gap: 8px; color: var(--secondary-text-color); font-size: 14px; padding: 16px 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -738,6 +882,37 @@
       this._fireConfigChanged();
     }
 
+    // NEU: Raum aus Übersicht ausblenden / einblenden
+    _toggleAreaHidden(areaId, hidden) {
+      const cfg = JSON.parse(JSON.stringify(this._config));
+      cfg.areas_options         ??= {};
+      cfg.areas_options[areaId]  ??= {};
+      if (hidden) cfg.areas_options[areaId].hidden = true;
+      else        delete cfg.areas_options[areaId].hidden;
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
+    // NEU: Batterie-Entity hinzufügen / entfernen
+    _addBatteryEntity(entityId) {
+      if (!entityId) return;
+      const cfg  = JSON.parse(JSON.stringify(this._config));
+      cfg.battery_entities ??= [];
+      if (!cfg.battery_entities.includes(entityId)) cfg.battery_entities.push(entityId);
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
+    _removeBatteryEntity(entityId) {
+      const cfg  = JSON.parse(JSON.stringify(this._config));
+      cfg.battery_entities = (cfg.battery_entities || []).filter(id => id !== entityId);
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
     _setPrimarySensor(areaId, sensorClass, entityId) {
       const cfg = JSON.parse(JSON.stringify(this._config));
       cfg.areas_options                            ??= {};
@@ -778,7 +953,6 @@
       this._fireConfigChanged();
     }
 
-    // Spaltenreihenfolge: Eintrag an idx um einen Schritt verschieben
     _moveColumn(idx, dir) {
       const cfg   = JSON.parse(JSON.stringify(this._config));
       const order = cfg.column_order?.length ? [...cfg.column_order] : COLUMN_DEFS.map(c => c.key);
@@ -791,12 +965,9 @@
       this._fireConfigChanged();
     }
 
-    // Raumreihenfolge: area_id an idx um einen Schritt verschieben
     _moveArea(areaId, dir, allAreaIds) {
       const cfg   = JSON.parse(JSON.stringify(this._config));
-      // Baue vollständige area_order aus aktuellem Stand (falls noch nicht gesetzt)
       let order = cfg.area_order?.length ? [...cfg.area_order] : [...allAreaIds];
-      // Stelle sicher dass alle aktuellen Bereiche enthalten sind
       for (const id of allAreaIds) { if (!order.includes(id)) order.push(id); }
       const idx    = order.indexOf(areaId);
       const newIdx = idx + dir;
@@ -860,6 +1031,44 @@
         <div class="opt-hint">Gilt für alle Raumansichten. Leere Spalten werden automatisch ausgeblendet.</div>
       `;
 
+      // ── Batterie-Entities-Editor ─────────────────────────────────────────
+      let batteryHtml = '';
+      if (!this._loading && this._registry) {
+        const { entities = [] } = this._registry;
+        const currentBatList = cfg.battery_entities || [];
+        const allBatSensors = entities.filter(e =>
+          e?.entity_id?.startsWith('sensor.') &&
+          this._hass?.states[e.entity_id]?.attributes?.device_class === 'battery'
+        ).map(e => e.entity_id).sort();
+
+        const listHtml = currentBatList.length
+          ? currentBatList.map(id => `
+              <div class="battery-entity-row">
+                <span>${id}</span>
+                <button class="battery-remove-btn" data-remove-battery="${id}" title="Entfernen">✕</button>
+              </div>`).join('')
+          : `<div class="opt-hint" style="padding:4px 0">Leer = Autodetect (alle sensor.* mit device_class battery)</div>`;
+
+        const addableOptions = allBatSensors
+          .filter(id => !currentBatList.includes(id))
+          .map(id => `<option value="${id}">${id}</option>`)
+          .join('');
+
+        batteryHtml = `
+          <div class="battery-list">${listHtml}</div>
+          ${addableOptions ? `
+            <div class="battery-add-row">
+              <select class="battery-add-select" id="battery-add-select">
+                <option value="">– Entity auswählen –</option>
+                ${addableOptions}
+              </select>
+              <button class="battery-add-btn" id="battery-add-btn">+ Hinzufügen</button>
+            </div>` : ''}
+        `;
+      } else {
+        batteryHtml = `<div class="opt-hint">Wird geladen…</div>`;
+      }
+
       // ── Räume-Bereich ─────────────────────────────────────────────────────
       let areasHtml = '';
 
@@ -875,10 +1084,11 @@
           areasHtml = '<div class="loading">Keine Bereiche gefunden.</div>';
         } else {
           areasHtml = sorted.map((area, areaIdx) => {
-            const aId    = area.area_id;
-            const isOpen = this._openAreas.has(aId);
-            const curTab = this._activeTab.get(aId) || 'devices';
-            const aOpts  = cfg.areas_options?.[aId] || {};
+            const aId      = area.area_id;
+            const isOpen   = this._openAreas.has(aId);
+            const curTab   = this._activeTab.get(aId) || 'devices';
+            const aOpts    = cfg.areas_options?.[aId] || {};
+            const isHidden = aOpts.hidden === true;
 
             const allByDomain = {};
             const rawEntities = R.filterAvailable(R.filterByLabels(
@@ -898,16 +1108,16 @@
               const hiddenNow = R.getHiddenEntities(cfg, aId, dom);
               const allHidden = hiddenNow.length === allByDomain[dom].length;
               const entityRows = allByDomain[dom].map(id => {
-                const isHidden = hiddenNow.includes(id);
-                const entObj   = entities.find(e => e.entity_id === id);
-                const fname    = entObj?.name || entObj?.original_name || '';
+                const isHiddenE = hiddenNow.includes(id);
+                const entObj    = entities.find(e => e.entity_id === id);
+                const fname     = entObj?.name || entObj?.original_name || '';
                 return `
                   <div class="entity-row">
                     <div class="entity-label">
                       ${fname ? `<div class="entity-name">${fname}</div>` : ''}
                       <div class="entity-id-small">${id}</div>
                     </div>
-                    <ha-switch data-area="${aId}" data-domain="${dom}" data-entity="${id}" ${!isHidden ? 'checked' : ''}></ha-switch>
+                    <ha-switch data-area="${aId}" data-domain="${dom}" data-entity="${id}" ${!isHiddenE ? 'checked' : ''}></ha-switch>
                   </div>`;
               }).join('');
               return `
@@ -944,6 +1154,11 @@
 
             const roomOptsHtml = `
               <div class="room-opts">
+                <!-- NEU: Raum ausblenden Toggle -->
+                <div class="general-row" style="margin-bottom:14px;border-radius:8px">
+                  <label>Raum ausblenden<span class="sub">Versteckt diesen Raum in Übersicht und Sidebar</span></label>
+                  <ha-switch data-toggle-area-hidden="${aId}" ${isHidden ? 'checked' : ''}></ha-switch>
+                </div>
                 <div class="opt-row">
                   <div class="opt-label"><ha-icon icon="mdi:format-title"></ha-icon>Titel-Override</div>
                   <input class="opt-input" type="text" placeholder="${area.name}" value="${aOpts.title_override || ''}" data-area="${aId}" data-opt-key="title_override">
@@ -982,6 +1197,7 @@
                     ${aOpts.title_override || area.name}
                   </div>
                   <div class="area-header-right">
+                    ${isHidden ? '<span class="badge-hidden">ausgeblendet</span>' : ''}
                     <span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span>
                     <button class="area-sort-btn" data-move-area="${aId}" data-dir="-1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === 0 ? 'disabled' : ''} title="Raum nach oben">↑</button>
                     <button class="area-sort-btn" data-move-area="${aId}" data-dir="1"  data-all-areas="${allAreaIds.join(',')}" ${areaIdx === sorted.length - 1 ? 'disabled' : ''} title="Raum nach unten">↓</button>
@@ -1024,6 +1240,10 @@
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:view-column"></ha-icon>Spaltenreihenfolge</div>
         ${colSortHtml}
 
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:battery-low"></ha-icon>Batterie-Monitoring</div>
+        <div class="opt-hint" style="margin-bottom:6px">Manuell gepflegte Liste überschreibt die automatische Erkennung. Leer = alle Batterie-Sensoren werden erkannt.</div>
+        ${batteryHtml}
+
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
@@ -1032,6 +1252,16 @@
       shadow.getElementById('sw-areas')   ?.addEventListener('change', e => this._setConfigValue('show_areas',          e.target.checked));
       shadow.getElementById('sw-security')?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
       shadow.getElementById('sw-battery') ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
+
+      // Batterie Hinzufügen
+      shadow.getElementById('battery-add-btn')?.addEventListener('click', () => {
+        const sel = shadow.getElementById('battery-add-select');
+        if (sel?.value) this._addBatteryEntity(sel.value);
+      });
+      // Batterie Entfernen
+      shadow.querySelectorAll('.battery-remove-btn[data-remove-battery]').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); this._removeBatteryEntity(btn.dataset.removeBattery); });
+      });
 
       // Spalten-Sort-Buttons
       shadow.querySelectorAll('.sort-btn[data-move-col]').forEach(btn => {
@@ -1053,6 +1283,15 @@
       shadow.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._switchTab(btn.dataset.area, btn.dataset.tab); }));
       shadow.querySelectorAll('.domain-all-btn').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); const { area, domain, hide, entities: ents } = btn.dataset; this._toggleDomainAll(area, domain, ents.split(','), hide === 'true'); }));
       shadow.querySelectorAll('ha-switch[data-entity]').forEach(sw => sw.addEventListener('change', e => { const { area, domain, entity } = e.target.dataset; this._toggleEntityHidden(area, domain, entity, !e.target.checked); }));
+
+      // NEU: Raum ausblenden Toggle
+      shadow.querySelectorAll('ha-switch[data-toggle-area-hidden]').forEach(sw => {
+        sw.addEventListener('change', e => {
+          e.stopPropagation();
+          this._toggleAreaHidden(e.target.dataset.toggleAreaHidden, e.target.checked);
+        });
+      });
+
       shadow.querySelectorAll('.opt-input[data-opt-key]').forEach(inp => { let t; inp.addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => this._setAreaOption(inp.dataset.area, inp.dataset.optKey, e.target.value.trim()), 400); }); });
       shadow.querySelectorAll('.opt-select[data-opt-key]').forEach(sel => sel.addEventListener('change', e => this._setAreaOption(sel.dataset.area, sel.dataset.optKey, e.target.value)));
       shadow.querySelectorAll('.opt-select[data-sensor-class]').forEach(sel => sel.addEventListener('change', e => this._setPrimarySensor(sel.dataset.area, sel.dataset.sensorClass, e.target.value)));
@@ -1078,12 +1317,14 @@
         const views    = [];
         views.push(OverviewView.generate(hass, config, registry, basePath));
 
-        // Räume in konfigurierter Reihenfolge hinzufügen
+        // Räume in konfigurierter Reihenfolge — ausgeblendete als Views trotzdem hinzufügen (nur Übersicht versteckt)
         const sortedAreas = R.sortAreas(
           registryData.areas.filter(a => a?.area_id && !a.labels?.includes('no_dboard')),
           config.area_order
         );
         for (const area of sortedAreas) {
+          // Ausgeblendete Räume bekommen keine View-Kachel in der Sidebar
+          if (R.isAreaHidden(config, area.area_id)) continue;
           views.push(RoomView.generate(area.area_id, hass, config, registry));
         }
 
@@ -1101,7 +1342,7 @@
     }
 
     static getStubConfig() {
-      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {}, column_order: [], area_order: [] };
+      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: [] };
     }
   }
 
