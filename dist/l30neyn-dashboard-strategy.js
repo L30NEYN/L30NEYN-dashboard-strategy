@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.8
+ * @version 1.6.9
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.8';
+  const VERSION = '1.6.9';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -131,6 +131,20 @@
     getHiddenEntities: (config, areaId, domain) =>
       config?.areas_options?.[areaId]?.groups_options?.[domain]?.hidden || [],
     filterAreas: (areas) => (areas || []).filter(a => a && !(a.labels?.includes('no_dboard'))),
+
+    // Sortiert Bereiche gemäß area_order config (nicht konfigurierte kommen alphabetisch danach)
+    sortAreas(areas, areaOrder) {
+      if (!areaOrder?.length) return areas;
+      const ordered = [];
+      const remaining = [...areas];
+      for (const id of areaOrder) {
+        const idx = remaining.findIndex(a => a.area_id === id);
+        if (idx !== -1) { ordered.push(remaining.splice(idx, 1)[0]); }
+      }
+      remaining.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+      return [...ordered, ...remaining];
+    },
+
     getRoomEntities(areaId, entities, devices, config) {
       const deviceAreaMap = RegistryHelpers.buildDeviceAreaMap(devices);
       const ae = RegistryHelpers.filterAvailable(
@@ -364,17 +378,30 @@
     { key: 'pm25',        label: 'PM2.5',       icon: 'mdi:air-filter',    unit: 'µg/m³' },
   ];
 
-  // ── Spalten-Konfiguration ──────────────────────────────────────────────────────
+  // ── Spalten-Basis-Konfiguration ────────────────────────────────────────────────
+  // Schlüssel = erster domain-Wert (zur Identifikation in column_order)
   const COLUMN_DEFS = [
-    { domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
-    { domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
-    { domains: ['climate', 'fan'], title: 'Klima',       icon: 'mdi:thermometer'    },
-    { domains: ['media_player'],   title: 'Medien',      icon: 'mdi:speaker'        },
-    { domains: ['switch'],         title: 'Schalter',    icon: 'mdi:toggle-switch'  },
-    { domains: ['sensor'],         title: 'Sensoren',    icon: 'mdi:eye'            },
-    { domains: ['binary_sensor'],  title: 'Status',      icon: 'mdi:bell-ring'      },
-    { domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
+    { key: 'light',         domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
+    { key: 'cover',         domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
+    { key: 'climate',       domains: ['climate', 'fan'], title: 'Klima',       icon: 'mdi:thermometer'    },
+    { key: 'media_player',  domains: ['media_player'],   title: 'Medien',      icon: 'mdi:speaker'        },
+    { key: 'switch',        domains: ['switch'],         title: 'Schalter',    icon: 'mdi:toggle-switch'  },
+    { key: 'sensor',        domains: ['sensor'],         title: 'Sensoren',    icon: 'mdi:eye'            },
+    { key: 'binary_sensor', domains: ['binary_sensor'],  title: 'Status',      icon: 'mdi:bell-ring'      },
+    { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
   ];
+
+  // Gibt COLUMN_DEFS in der durch config.column_order gewünschten Reihenfolge zurück
+  const resolveColumnOrder = (config) => {
+    const order = config?.column_order;
+    if (!order?.length) return COLUMN_DEFS;
+    const map = new Map(COLUMN_DEFS.map(c => [c.key, c]));
+    const sorted = [];
+    for (const key of order) { if (map.has(key)) sorted.push(map.get(key)); }
+    // Nicht konfigurierte Spalten hinten anhängen
+    for (const col of COLUMN_DEFS) { if (!sorted.includes(col)) sorted.push(col); }
+    return sorted;
+  };
 
   // Baut eine einzelne Domain-Spalte als vertical-stack
   const buildColumn = (colDef, roomEntities, hass) => {
@@ -399,11 +426,9 @@
       } else if (domain === 'media_player') {
         ids.forEach(id => colCards.push(Cards.mediaPlayer(id)));
       } else if (domain === 'sensor') {
-        // Nur klassische Messwert-Sensoren
         const relevant = ids.filter(id => SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
         relevant.forEach(id => colCards.push(Cards.entity(id)));
       } else if (domain === 'binary_sensor') {
-        // Status-Sensoren: Bewegung, Tür, Fenster, Rauch, etc.
         const relevant = ids.filter(id => BINARY_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
         relevant.forEach(id => colCards.push(Cards.entity(id)));
       } else {
@@ -432,7 +457,7 @@
 
         if (config.show_areas !== false) {
           const deviceAreaMap = R.buildDeviceAreaMap(devices);
-          const filteredAreas = R.filterAreas(areas);
+          const filteredAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
           if (filteredAreas.length) {
             const areaButtons = filteredAreas.map(area => {
               const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
@@ -491,17 +516,14 @@
         const aOpts        = config?.areas_options?.[areaId] || {};
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
 
-        // ── Spalten aufbauen ────────────────────────────────────────────────
+        // ── Spalten aufbauen (mit konfigurierbarer Reihenfolge) ─────────────
+        const orderedCols   = resolveColumnOrder(config);
         const populatedCols = [];
-        for (const colDef of COLUMN_DEFS) {
+        for (const colDef of orderedCols) {
           const hasContent = colDef.domains.some(d => {
             if (!roomEntities[d]?.length) return false;
-            if (d === 'sensor') {
-              return roomEntities[d].some(id => SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
-            }
-            if (d === 'binary_sensor') {
-              return roomEntities[d].some(id => BINARY_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
-            }
+            if (d === 'sensor')        return roomEntities[d].some(id => SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
+            if (d === 'binary_sensor') return roomEntities[d].some(id => BINARY_SENSOR_CLASSES.has(hass.states[id]?.attributes?.device_class));
             return true;
           });
           if (!hasContent) continue;
@@ -509,7 +531,6 @@
           if (colStack) populatedCols.push(colStack);
         }
 
-        // ── Spalten-Block ───────────────────────────────────────────────────
         let columnsBlock;
         if (populatedCols.length === 0) {
           columnsBlock = { type: 'markdown', content: 'Keine Geräte in diesem Raum.' };
@@ -556,15 +577,16 @@
           '', '```yaml',
           'strategy:', '  type: custom:l30neyn-dashboard-strategy',
           '  navigation:', `    dashboard_url_path: ${urlPath}`,
+          '  # Spaltenreihenfolge (Keys: light, cover, climate, media_player, switch, sensor, binary_sensor, camera)',
+          '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]',
+          '  # Raumreihenfolge (area_ids aus HA)',
+          '  area_order: []',
           '  areas_options:', '    <area_id>:', '      title_override: "Mein Raum"',
-          '      icon_override: mdi:sofa', '      primary_sensors:',
-          '        temperature: sensor.raum_temperatur', '        humidity: sensor.raum_feuchte',
-          '        illuminance: sensor.raum_helligkeit', '        co2: sensor.raum_co2',
-          '      groups_options:', '        <domain>:', '          hidden:', '            - entity.id',
+          '      icon_override: mdi:sofa',
           '```',
         ].join('\n') });
-        const filteredAreas = R.filterAreas(areas);
-        for (const area of filteredAreas) {
+        const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
+        for (const area of sortedAreas) {
           const roomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
           if (!Object.keys(roomEntities).length) continue;
           cards.push(Cards.title(area.name));
@@ -607,6 +629,15 @@
     .general-row .sub { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
     ha-switch { flex-shrink: 0; margin-left: 12px; }
 
+    /* ── Sortier-Reihen ── */
+    .sort-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+    .sort-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--secondary-background-color); border-radius: 8px; border: 1px solid var(--divider-color); }
+    .sort-row-label { flex: 1; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .sort-row-label ha-icon { --mdi-icon-size: 16px; color: var(--secondary-text-color); }
+    .sort-btn { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 2px 4px; border-radius: 4px; line-height: 1; font-size: 16px; transition: color 0.15s, background 0.15s; }
+    .sort-btn:hover { color: var(--primary-color, #41BDF5); background: rgba(65,189,245,0.1); }
+    .sort-btn:disabled { opacity: 0.25; cursor: default; }
+
     .area-card { border: 1px solid var(--divider-color); border-radius: 12px; margin-bottom: 10px; overflow: hidden; background: var(--card-background-color); box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: box-shadow 0.2s; }
     .area-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
     .area-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; background: var(--secondary-background-color); border-bottom: 1px solid transparent; transition: border-color 0.2s, background 0.15s; }
@@ -614,9 +645,12 @@
     .area-header.open { border-bottom-color: var(--divider-color); }
     .area-header-left { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
     .area-header-left ha-icon { --mdi-icon-size: 20px; color: var(--secondary-text-color); }
-    .area-header-right { display: flex; align-items: center; gap: 8px; }
+    .area-header-right { display: flex; align-items: center; gap: 6px; }
     .badge { font-size: 11px; font-weight: 700; background: var(--error-color, #db4437); color: #fff; border-radius: 10px; padding: 1px 7px; display: none; }
     .badge.visible { display: inline-block; }
+    .area-sort-btn { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 2px 4px; border-radius: 4px; font-size: 15px; line-height: 1; transition: color 0.15s; }
+    .area-sort-btn:hover { color: var(--primary-color, #41BDF5); }
+    .area-sort-btn:disabled { opacity: 0.2; cursor: default; }
     .chevron { --mdi-icon-size: 20px; color: var(--secondary-text-color); transition: transform 0.25s; }
     .chevron.open { transform: rotate(180deg); }
     .area-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
@@ -744,6 +778,36 @@
       this._fireConfigChanged();
     }
 
+    // Spaltenreihenfolge: Eintrag an idx um einen Schritt verschieben
+    _moveColumn(idx, dir) {
+      const cfg   = JSON.parse(JSON.stringify(this._config));
+      const order = cfg.column_order?.length ? [...cfg.column_order] : COLUMN_DEFS.map(c => c.key);
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= order.length) return;
+      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+      cfg.column_order = order;
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
+    // Raumreihenfolge: area_id an idx um einen Schritt verschieben
+    _moveArea(areaId, dir, allAreaIds) {
+      const cfg   = JSON.parse(JSON.stringify(this._config));
+      // Baue vollständige area_order aus aktuellem Stand (falls noch nicht gesetzt)
+      let order = cfg.area_order?.length ? [...cfg.area_order] : [...allAreaIds];
+      // Stelle sicher dass alle aktuellen Bereiche enthalten sind
+      for (const id of allAreaIds) { if (!order.includes(id)) order.push(id); }
+      const idx    = order.indexOf(areaId);
+      const newIdx = idx + dir;
+      if (idx === -1 || newIdx < 0 || newIdx >= order.length) return;
+      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+      cfg.area_order = order;
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
     _fireConfigChanged() {
       this.dispatchEvent(new CustomEvent('config-changed', {
         detail: { config: this._config }, bubbles: true, composed: true,
@@ -778,17 +842,39 @@
       const showSecurity = cfg.show_security       !== false;
       const showBattery  = cfg.show_battery_status !== false;
 
+      // ── Spaltenreihenfolge-Editor ─────────────────────────────────────────
+      const currentColOrder = cfg.column_order?.length ? cfg.column_order : COLUMN_DEFS.map(c => c.key);
+      const colSortHtml = `
+        <div class="sort-list" id="col-sort-list">
+          ${currentColOrder.map((key, idx) => {
+            const col = COLUMN_DEFS.find(c => c.key === key);
+            if (!col) return '';
+            return `
+              <div class="sort-row">
+                <div class="sort-row-label"><ha-icon icon="${col.icon}"></ha-icon>${col.title}</div>
+                <button class="sort-btn" data-move-col="${idx}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Nach oben">↑</button>
+                <button class="sort-btn" data-move-col="${idx}" data-dir="1"  ${idx === currentColOrder.length - 1 ? 'disabled' : ''} title="Nach unten">↓</button>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="opt-hint">Gilt für alle Raumansichten. Leere Spalten werden automatisch ausgeblendet.</div>
+      `;
+
+      // ── Räume-Bereich ─────────────────────────────────────────────────────
       let areasHtml = '';
 
       if (this._loading) {
         areasHtml = `<div class="loading"><div class="spinner"></div>Lade Räume und Geräte…</div>`;
       } else if (this._registry) {
         const { areas = [], entities = [], devices = [] } = this._registry;
-        const filtered = R.filterAreas(areas);
-        if (!filtered.length) {
+        const filtered   = R.filterAreas(areas);
+        const allAreaIds = filtered.map(a => a.area_id);
+        const sorted     = R.sortAreas(filtered, cfg.area_order);
+
+        if (!sorted.length) {
           areasHtml = '<div class="loading">Keine Bereiche gefunden.</div>';
         } else {
-          areasHtml = filtered.map(area => {
+          areasHtml = sorted.map((area, areaIdx) => {
             const aId    = area.area_id;
             const isOpen = this._openAreas.has(aId);
             const curTab = this._activeTab.get(aId) || 'devices';
@@ -897,6 +983,8 @@
                   </div>
                   <div class="area-header-right">
                     <span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span>
+                    <button class="area-sort-btn" data-move-area="${aId}" data-dir="-1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === 0 ? 'disabled' : ''} title="Raum nach oben">↑</button>
+                    <button class="area-sort-btn" data-move-area="${aId}" data-dir="1"  data-all-areas="${allAreaIds.join(',')}" ${areaIdx === sorted.length - 1 ? 'disabled' : ''} title="Raum nach unten">↓</button>
                     <ha-icon class="chevron${isOpen ? ' open' : ''}" icon="mdi:chevron-down"></ha-icon>
                   </div>
                 </div>
@@ -932,6 +1020,10 @@
           <label>Batterie-Warnungen anzeigen<span class="sub">Geräte mit niedrigem Akkustand</span></label>
           <ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch>
         </div>
+
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:view-column"></ha-icon>Spaltenreihenfolge</div>
+        ${colSortHtml}
+
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
@@ -940,6 +1032,23 @@
       shadow.getElementById('sw-areas')   ?.addEventListener('change', e => this._setConfigValue('show_areas',          e.target.checked));
       shadow.getElementById('sw-security')?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
       shadow.getElementById('sw-battery') ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
+
+      // Spalten-Sort-Buttons
+      shadow.querySelectorAll('.sort-btn[data-move-col]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._moveColumn(parseInt(btn.dataset.moveCol), parseInt(btn.dataset.dir));
+        });
+      });
+
+      // Raum-Sort-Buttons
+      shadow.querySelectorAll('.area-sort-btn[data-move-area]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._moveArea(btn.dataset.moveArea, parseInt(btn.dataset.dir), btn.dataset.allAreas.split(','));
+        });
+      });
+
       shadow.querySelectorAll('.area-header').forEach(h => h.addEventListener('click', () => this._toggleArea(h.dataset.area)));
       shadow.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._switchTab(btn.dataset.area, btn.dataset.tab); }));
       shadow.querySelectorAll('.domain-all-btn').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); const { area, domain, hide, entities: ents } = btn.dataset; this._toggleDomainAll(area, domain, ents.split(','), hide === 'true'); }));
@@ -968,10 +1077,16 @@
         const registry = { areas: registryData.areas, devices: registryData.devices, entities: registryData.entities };
         const views    = [];
         views.push(OverviewView.generate(hass, config, registry, basePath));
-        for (const area of registryData.areas) {
-          if (!area?.area_id || area.labels?.includes('no_dboard')) continue;
+
+        // Räume in konfigurierter Reihenfolge hinzufügen
+        const sortedAreas = R.sortAreas(
+          registryData.areas.filter(a => a?.area_id && !a.labels?.includes('no_dboard')),
+          config.area_order
+        );
+        for (const area of sortedAreas) {
           views.push(RoomView.generate(area.area_id, hass, config, registry));
         }
+
         views.push(SettingsView.generate(hass, config, registry, basePath));
         console.info(`[L30NEYN] Generated ${views.length} views`);
         return { views };
@@ -986,7 +1101,7 @@
     }
 
     static getStubConfig() {
-      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {} };
+      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {}, column_order: [], area_order: [] };
     }
   }
 
