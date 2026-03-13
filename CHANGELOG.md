@@ -4,6 +4,18 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [1.6.7] - 2026-03-13
+
+### 🐛 Fixed — Volle Breite im Raum-View (panel: true)
+
+- **Problem:** `card_mod` auf `vertical-stack` hatte keinen Effekt, weil `hui-vertical-stack-card` intern keine `ha-card`-Instanz rendert — der Style-Selektor `ha-card` greift daher ins Leere
+- **Root Cause:** HA's View-Grid teilt Cards in Spalten auf und begrenzt jede auf ~600px `max-width`. Da der `vertical-stack` keine echte `ha-card` hat, konnte `card_mod` diese Grenze nicht überschreiben
+- **Fix:** `panel: true` auf dem RoomView-Objekt → HA rendert die einzige Card ohne Grid-Limitierung in voller View-Breite
+- **Ergebnis:** `horizontal-stack` bekommt 100% der View-Breite, alle Domain-Spalten verteilen sich dynamisch korrekt
+- **Aufgeräumt:** `card_mod` vom `vertical-stack` entfernt (war wirkungslos)
+
+---
+
 ## [1.6.6] - 2026-03-13
 
 ### 🐛 Fixed — Layout-Fix: Spaltenbreite im Raum-View
@@ -110,6 +122,7 @@ vertical-stack (einzige Card der View)
 
 ---
 
+[1.6.7]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.6...v1.6.7
 [1.6.6]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.5...v1.6.6
 [1.6.5]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.3...v1.6.4

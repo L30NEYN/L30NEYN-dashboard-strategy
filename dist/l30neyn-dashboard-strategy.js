@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.6
+ * @version 1.6.7
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.6';
+  const VERSION = '1.6.7';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -505,7 +505,6 @@
         }
 
         // ── Spalten-Block ───────────────────────────────────────────────────
-        // Alle Spalten in EINEM horizontal-stack → eine einzige Zeile
         let columnsBlock;
         if (populatedCols.length === 0) {
           columnsBlock = { type: 'markdown', content: 'Keine Geräte in diesem Raum.' };
@@ -515,10 +514,11 @@
           columnsBlock = { type: 'horizontal-stack', cards: populatedCols };
         }
 
-        // ── Gesamtlayout: vertical-stack mit Header oben + Spalten darunter ─
-        // v1.6.6: card_mod erzwingt max-width: 100% auf dem äußeren vertical-stack,
-        // damit HA's default max-width (ca. 600px) nicht greift und der
-        // horizontal-stack die volle View-Breite für seine Spalten nutzen kann.
+        // ── Gesamtlayout ────────────────────────────────────────────────────
+        // v1.6.7: panel: true auf dem View-Objekt → HA rendert die einzige
+        // Card ohne das normale View-Grid und seine ~600px max-width.
+        // card_mod auf vertical-stack hatte keinen Effekt, da hui-vertical-stack-card
+        // intern keine ha-card-Instanz rendert.
         const roomCard = {
           type: 'vertical-stack',
           cards: [
@@ -526,23 +526,13 @@
             Cards.roomChipsHeader(area, aOpts, roomEntities, hass),
             columnsBlock,
           ],
-          card_mod: {
-            style: `
-              ha-card {
-                max-width: 100% !important;
-                width: 100% !important;
-              }
-            `,
-          },
         };
 
         return {
           title: aOpts.title_override || area.name,
           path: areaId,
           icon: aOpts.icon_override || area.icon || 'mdi:home',
-          // Eine einzige Card = der vertical-stack. Das View-Grid hat nichts
-          // mehr zu verteilen, alles ist intern strukturiert.
-          panel: false,
+          panel: true,
           cards: [roomCard],
         };
       } catch (e) {
