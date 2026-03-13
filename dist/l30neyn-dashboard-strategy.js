@@ -1,18 +1,18 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.4
+ * @version 1.6.5
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.4';
+  const VERSION = '1.6.5';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 1 — WEBSOCKET HELPER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const callWS = async (hass, message) => {
     if (typeof hass.callWS === 'function') return await hass.callWS(message);
@@ -20,9 +20,9 @@
     throw new Error('No WebSocket method available on hass object');
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 2 — REGISTRY DATA LOADER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const loadRegistryData = async (hass) => {
     if (!hass) throw new Error('HASS object is null or undefined');
@@ -44,9 +44,9 @@
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 3 — DASHBOARD CONTEXT RESOLVER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const DashboardContextResolver = {
     async resolve(hass, config) {
@@ -73,9 +73,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 4 — DASHBOARD PATH RESOLVER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const DashboardPathResolver = {
     async resolve(hass, config) {
@@ -84,9 +84,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 5 — NAVIGATION BUILDER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const NavigationBuilder = {
     room(basePath, areaId)  { return `${basePath}/${areaId}`; },
@@ -94,9 +94,9 @@
     settings(basePath)      { return `${basePath}/settings`; },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 6 — REGISTRY HELPERS
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const RegistryHelpers = {
     filterByLabels: (entities) => entities.filter(e => e?.entity_id && !(e.labels?.includes('no_dboard'))),
@@ -149,9 +149,9 @@
   };
   const R = RegistryHelpers;
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 7 — DATA COLLECTORS
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const Collectors = {
     collectRoomEntities(areaId, hass, entities, devices, config) {
@@ -193,9 +193,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 8 — CARD BUILDERS (Mushroom)
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const Cards = {
     light:       (id) => ({ type: 'custom:mushroom-light-card',        entity: id, show_brightness_control: true, show_color_control: true, show_color_temp_control: true, collapsible_controls: true, fill_container: true }),
@@ -210,7 +210,7 @@
       return { type: 'markdown', content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
     },
 
-    // ── Raumtitel (schlicht) ────────────────────────────────────────────────────
+    // ── Raumtitel (schlicht) ────────────────────────────────────────────────
     roomTitle(area, aOpts) {
       return {
         type: 'custom:mushroom-title-card',
@@ -219,13 +219,11 @@
       };
     },
 
-    // ── Chip-Header ─────────────────────────────────────────────────────────────
-    // Gibt eine mushroom-chips-card zurück mit dynamischen Template-Chips.
-    // Chips werden nur erzeugt wenn die nötigen Entities vorhanden sind.
+    // ── Chip-Header ─────────────────────────────────────────────────────────
     roomChipsHeader(area, aOpts, roomEntities, hass) {
       const chips = [];
 
-      // 1. Raumname-Chip (navigiert zurück zur Übersicht / dient als Titel)
+      // 1. Raumname-Chip
       chips.push({
         type: 'template',
         icon: aOpts?.icon_override || area.icon || 'mdi:home',
@@ -234,101 +232,72 @@
         tap_action: { action: 'none' },
       });
 
-      // 2. Temperatur-Chip
+      // 2. Temperatur
       const tempId = aOpts?.primary_sensors?.temperature;
       const climId = (roomEntities.climate || [])[0];
       if (tempId && hass.states[tempId]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:thermometer',
-          icon_color: 'red',
+        chips.push({ type: 'template', icon: 'mdi:thermometer', icon_color: 'red',
           content: `{{ states('${tempId}') | float(0) | round(1) }} °C`,
-          tap_action: { action: 'more-info', entity: tempId },
-        });
+          tap_action: { action: 'more-info', entity: tempId } });
       } else if (climId && hass.states[climId]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:thermometer',
-          icon_color: 'red',
+        chips.push({ type: 'template', icon: 'mdi:thermometer', icon_color: 'red',
           content: `{{ state_attr('${climId}', 'current_temperature') | round(1) }} °C`,
-          tap_action: { action: 'more-info', entity: climId },
-        });
+          tap_action: { action: 'more-info', entity: climId } });
       }
 
-      // 3. Luftfeuchte-Chip
+      // 3. Luftfeuchte
       const humId = aOpts?.primary_sensors?.humidity;
       if (humId && hass.states[humId]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:water-percent',
-          icon_color: 'blue',
+        chips.push({ type: 'template', icon: 'mdi:water-percent', icon_color: 'blue',
           content: `{{ states('${humId}') | float(0) | round(0) }} %`,
-          tap_action: { action: 'more-info', entity: humId },
-        });
+          tap_action: { action: 'more-info', entity: humId } });
       }
 
-      // 4. Helligkeit-Chip (Illuminance)
+      // 4. Helligkeit
       const luxId = aOpts?.primary_sensors?.illuminance;
       if (luxId && hass.states[luxId]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:brightness-5',
-          icon_color: 'yellow',
+        chips.push({ type: 'template', icon: 'mdi:brightness-5', icon_color: 'yellow',
           content: `{{ states('${luxId}') | float(0) | round(0) }} lx`,
-          tap_action: { action: 'more-info', entity: luxId },
-        });
+          tap_action: { action: 'more-info', entity: luxId } });
       }
 
-      // 5. CO₂-Chip
+      // 5. CO₂
       const co2Id = aOpts?.primary_sensors?.co2;
       if (co2Id && hass.states[co2Id]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:molecule-co2',
+        chips.push({ type: 'template', icon: 'mdi:molecule-co2',
           icon_color: `{{ 'red' if states('${co2Id}') | float(0) > 1200 else ('orange' if states('${co2Id}') | float(0) > 800 else 'green') }}`,
           content: `{{ states('${co2Id}') | float(0) | round(0) }} ppm`,
-          tap_action: { action: 'more-info', entity: co2Id },
-        });
+          tap_action: { action: 'more-info', entity: co2Id } });
       }
 
-      // 6. Lichter-Chip
+      // 6. Lichter X/Y
       const lights = roomEntities.light || [];
       if (lights.length > 0) {
         const idList = lights.map(id => `'${id}'`).join(',');
-        chips.push({
-          type: 'template',
-          icon: 'mdi:lightbulb-group',
+        chips.push({ type: 'template', icon: 'mdi:lightbulb-group',
           icon_color: `{{ 'amber' if [${idList}] | select('is_state', 'on') | list | count > 0 else 'grey' }}`,
           content: `{{ [${idList}] | select('is_state', 'on') | list | count }} / ${lights.length}`,
-          tap_action: { action: 'none' },
-        });
+          tap_action: { action: 'none' } });
       }
 
-      // 7. Rollos-Chip (nur wenn welche offen)
+      // 7. Rollos X/Y
       const covers = roomEntities.cover || [];
       if (covers.length > 0) {
         const idList = covers.map(id => `'${id}'`).join(',');
-        chips.push({
-          type: 'template',
-          icon: 'mdi:window-shutter-open',
+        chips.push({ type: 'template', icon: 'mdi:window-shutter-open',
           icon_color: `{{ 'blue' if [${idList}] | select('is_state', 'open') | list | count > 0 else 'grey' }}`,
           content: `{{ [${idList}] | select('is_state', 'open') | list | count }} / ${covers.length}`,
-          tap_action: { action: 'none' },
-        });
+          tap_action: { action: 'none' } });
       }
 
-      // 8. Klima-Chip (Soll-Temperatur wenn Climate vorhanden)
+      // 8. Klima-Soll
       if (climId && hass.states[climId]) {
-        chips.push({
-          type: 'template',
-          icon: 'mdi:thermostat',
+        chips.push({ type: 'template', icon: 'mdi:thermostat',
           icon_color: `{{ 'orange' if is_state('${climId}', 'heat') or is_state('${climId}', 'heat_cool') else 'blue' }}`,
           content: `{{ state_attr('${climId}', 'temperature') | round(1) }} °C`,
-          tap_action: { action: 'more-info', entity: climId },
-        });
+          tap_action: { action: 'more-info', entity: climId } });
       }
 
-      // Mindestens 1 Chip nötig (Raumname ist immer da)
       return {
         type: 'custom:mushroom-chips-card',
         chips,
@@ -363,9 +332,9 @@
 
     // Raum-Button auf Übersichtsseite
     roomButton(area, basePath, config) {
-      const aOpts      = config?.areas_options?.[area.area_id] || {};
-      const tempId     = aOpts?.primary_sensors?.temperature;
-      const lightInd   = aOpts?.light_indicator;
+      const aOpts    = config?.areas_options?.[area.area_id] || {};
+      const tempId   = aOpts?.primary_sensors?.temperature;
+      const lightInd = aOpts?.light_indicator;
       return {
         type: 'custom:mushroom-template-card',
         primary: aOpts.title_override || area.name,
@@ -382,9 +351,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 9 — VIEW BUILDERS
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
   const DOMAIN_TITLES = { light:'Beleuchtung', cover:'Rollos & Vorhänge', climate:'Klima', fan:'Ventilatoren', switch:'Schalter', media_player:'Medien', sensor:'Sensoren', binary_sensor:'Status', camera:'Kameras' };
@@ -400,23 +369,20 @@
 
   // ── Spalten-Konfiguration ──────────────────────────────────────────────────────
   const COLUMN_DEFS = [
-    { domains: ['light'],                    title: 'Beleuchtung',   icon: 'mdi:lightbulb',       cols: 1 },
-    { domains: ['cover'],                    title: 'Rollos',        icon: 'mdi:window-shutter',  cols: 1 },
-    { domains: ['climate', 'fan'],           title: 'Klima',         icon: 'mdi:thermometer',     cols: 1 },
-    { domains: ['media_player'],             title: 'Medien',        icon: 'mdi:speaker',         cols: 1 },
-    { domains: ['switch'],                   title: 'Schalter',      icon: 'mdi:toggle-switch',   cols: 1 },
-    { domains: ['sensor','binary_sensor'],   title: 'Sensoren',      icon: 'mdi:eye',             cols: 1 },
-    { domains: ['camera'],                   title: 'Kameras',       icon: 'mdi:camera',          cols: 2 },
+    { domains: ['light'],                    title: 'Beleuchtung',   icon: 'mdi:lightbulb'      },
+    { domains: ['cover'],                    title: 'Rollos',        icon: 'mdi:window-shutter' },
+    { domains: ['climate', 'fan'],           title: 'Klima',         icon: 'mdi:thermometer'    },
+    { domains: ['media_player'],             title: 'Medien',        icon: 'mdi:speaker'        },
+    { domains: ['switch'],                   title: 'Schalter',      icon: 'mdi:toggle-switch'  },
+    { domains: ['sensor','binary_sensor'],   title: 'Sensoren',      icon: 'mdi:eye'            },
+    { domains: ['camera'],                   title: 'Kameras',       icon: 'mdi:camera'         },
   ];
 
+  // Baut eine einzelne Domain-Spalte als vertical-stack
   const buildColumn = (colDef, roomEntities, hass) => {
     const colCards = [];
 
-    colCards.push({
-      type: 'custom:mushroom-title-card',
-      title: colDef.title,
-      subtitle: '',
-    });
+    colCards.push({ type: 'custom:mushroom-title-card', title: colDef.title, subtitle: '' });
 
     for (const domain of colDef.domains) {
       const ids = roomEntities[domain] || [];
@@ -442,6 +408,7 @@
       }
     }
 
+    // Spalte nur rendern wenn sie mehr als den Titel hat
     if (colCards.length <= 1) return null;
     return { type: 'vertical-stack', cards: colCards };
   };
@@ -522,16 +489,7 @@
         const aOpts        = config?.areas_options?.[areaId] || {};
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
 
-        const cards = [];
-
-        // ── HEADER-BEREICH (losgelöst von Spalten) ─────────────────────────────
-        // Raumtitel
-        cards.push(Cards.roomTitle(area, aOpts));
-
-        // Chip-Leiste mit dynamischen Badges
-        cards.push(Cards.roomChipsHeader(area, aOpts, roomEntities, hass));
-
-        // ── SPALTEN-BEREICH ────────────────────────────────────────────────────
+        // ── Spalten aufbauen ────────────────────────────────────────────────
         const populatedCols = [];
         for (const colDef of COLUMN_DEFS) {
           const hasContent = colDef.domains.some(d => {
@@ -542,36 +500,41 @@
             return true;
           });
           if (!hasContent) continue;
-
           const colStack = buildColumn(colDef, roomEntities, hass);
-          if (colStack) populatedCols.push({ stack: colStack, cols: colDef.cols });
+          if (colStack) populatedCols.push(colStack);
         }
 
+        // ── Spalten-Block ───────────────────────────────────────────────────
+        // Alle Spalten in EINEM horizontal-stack → eine einzige Zeile
+        let columnsBlock;
         if (populatedCols.length === 0) {
-          cards.push({ type: 'markdown', content: 'Keine Geräte in diesem Raum.' });
+          columnsBlock = { type: 'markdown', content: 'Keine Geräte in diesem Raum.' };
         } else if (populatedCols.length === 1) {
-          cards.push(populatedCols[0].stack);
+          columnsBlock = populatedCols[0];
         } else {
-          // Max. 3 Spalten nebeneinander, dann umbrechen
-          const chunks = [];
-          let chunk = [];
-          for (const col of populatedCols) {
-            chunk.push(col.stack);
-            if (chunk.length >= 3) { chunks.push(chunk); chunk = []; }
-          }
-          if (chunk.length) chunks.push(chunk);
-
-          for (const ch of chunks) {
-            if (ch.length === 1) cards.push(ch[0]);
-            else                 cards.push({ type: 'horizontal-stack', cards: ch });
-          }
+          columnsBlock = { type: 'horizontal-stack', cards: populatedCols };
         }
+
+        // ── Gesamtlayout: vertical-stack mit Header oben + Spalten darunter ─
+        // So steht der Header garantiert über ALLEN Spalten, unabhängig vom
+        // View-Grid des Dashboards.
+        const roomCard = {
+          type: 'vertical-stack',
+          cards: [
+            Cards.roomTitle(area, aOpts),
+            Cards.roomChipsHeader(area, aOpts, roomEntities, hass),
+            columnsBlock,
+          ],
+        };
 
         return {
           title: aOpts.title_override || area.name,
           path: areaId,
           icon: aOpts.icon_override || area.icon || 'mdi:home',
-          cards,
+          // Eine einzige Card = der vertical-stack. Das View-Grid hat nichts
+          // mehr zu verteilen, alles ist intern strukturiert.
+          panel: false,
+          cards: [roomCard],
         };
       } catch (e) {
         return { title: areaId, path: areaId, icon: 'mdi:home', cards: [Cards.error(e.message)] };
@@ -579,7 +542,7 @@
     },
   };
 
-  // ── SETTINGS VIEW ─────────────────────────────────────────────────────────────
+  // ── SETTINGS VIEW ──────────────────────────────────────────────────────────────
 
   const SettingsView = {
     generate(hass, config, registry, basePath) {
@@ -628,9 +591,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 10 — CONFIG EDITOR
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const EDITOR_STYLES = `
     :host { display: block; font-family: var(--primary-font-family, sans-serif); color: var(--primary-text-color); }
@@ -845,7 +808,6 @@
               if (allByDomain[dom]) hiddenCount += R.getHiddenEntities(cfg, aId, dom).length;
             }
 
-            // TAB 1: Geräte
             const domainBlocks = DOMAIN_ORDER.map(dom => {
               if (!allByDomain[dom]?.length) return '';
               const hiddenNow = R.getHiddenEntities(cfg, aId, dom);
@@ -873,7 +835,6 @@
                 </div>`;
             }).join('');
 
-            // TAB 2: Raumoptionen
             const allSensors = rawEntities.filter(e => e?.entity_id?.startsWith('sensor.'));
             const sensorDropdowns = PRIMARY_SENSOR_CLASSES.map(sc => {
               const candidates = allSensors.filter(e =>
@@ -990,9 +951,9 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // MODUL 11 — DASHBOARD STRATEGY (Entry Point)
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   class L30NEYNDashboardStrategy {
     static async generate(config, hass) {
@@ -1030,9 +991,9 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
   // REGISTER
-  // ═══════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════════
 
   const register = (name, cls) => {
     try { customElements.define(name, cls); }
