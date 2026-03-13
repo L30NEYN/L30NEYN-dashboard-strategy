@@ -1,18 +1,18 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.3
+ * @version 1.6.4
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.3';
+  const VERSION = '1.6.4';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 1 — WEBSOCKET HELPER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const callWS = async (hass, message) => {
     if (typeof hass.callWS === 'function') return await hass.callWS(message);
@@ -20,9 +20,9 @@
     throw new Error('No WebSocket method available on hass object');
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 2 — REGISTRY DATA LOADER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const loadRegistryData = async (hass) => {
     if (!hass) throw new Error('HASS object is null or undefined');
@@ -44,9 +44,9 @@
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 3 — DASHBOARD CONTEXT RESOLVER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const DashboardContextResolver = {
     async resolve(hass, config) {
@@ -73,9 +73,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 4 — DASHBOARD PATH RESOLVER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const DashboardPathResolver = {
     async resolve(hass, config) {
@@ -84,9 +84,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 5 — NAVIGATION BUILDER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const NavigationBuilder = {
     room(basePath, areaId)  { return `${basePath}/${areaId}`; },
@@ -94,9 +94,9 @@
     settings(basePath)      { return `${basePath}/settings`; },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 6 — REGISTRY HELPERS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const RegistryHelpers = {
     filterByLabels: (entities) => entities.filter(e => e?.entity_id && !(e.labels?.includes('no_dboard'))),
@@ -149,9 +149,9 @@
   };
   const R = RegistryHelpers;
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 7 — DATA COLLECTORS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const Collectors = {
     collectRoomEntities(areaId, hass, entities, devices, config) {
@@ -193,9 +193,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 8 — CARD BUILDERS (Mushroom)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const Cards = {
     light:       (id) => ({ type: 'custom:mushroom-light-card',        entity: id, show_brightness_control: true, show_color_control: true, show_color_temp_control: true, collapsible_controls: true, fill_container: true }),
@@ -207,61 +207,139 @@
     title:       (t, sub = '') => ({ type: 'custom:mushroom-title-card', title: t, subtitle: sub }),
     weather:     (entity) => ({ type: 'weather-forecast', entity, show_forecast: true }),
     error(error, details = '') {
-      return { type: 'markdown', content: `# \u26a0\ufe0f Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
+      return { type: 'markdown', content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
     },
 
-    // ── Dynamischer Raum-Header ──────────────────────────────────────────────
-    // Nutzt mushroom-template-card für Template-Zugriff auf hass.states
-    roomHeader(area, aOpts, roomEntities) {
-      const lights   = roomEntities.light   || [];
-      const covers   = roomEntities.cover   || [];
-      const climates = roomEntities.climate || [];
-
-      // Temperatur: aus primary_sensors oder erstem climate
-      const tempId  = aOpts?.primary_sensors?.temperature;
-      const humId   = aOpts?.primary_sensors?.humidity;
-      const climId  = climates[0];
-
-      // Template-Bausteine
-      const tempTpl  = tempId  ? `{{ states('${tempId}') | float(0) | round(1) }}\u00b0C` : (climId ? `{{ state_attr('${climId}', 'current_temperature') | round(1) }}\u00b0C` : null);
-      const humTpl   = humId   ? `{{ states('${humId}')  | float(0) | round(0) }}%` : null;
-
-      // Lichter an
-      const lightsTpl = lights.length
-        ? `{{ [${lights.map(id => `'${id}'`).join(',')}] | select('is_state', 'on') | list | count }} / ${lights.length} Lichter`
-        : null;
-
-      // Offene Covers
-      const coversTpl = covers.length
-        ? `{{ [${covers.map(id => `'${id}'`).join(',')}] | select('is_state', 'open') | list | count }} Rollos offen`
-        : null;
-
-      // Subtitle zusammenbauen: nur befüllte Teile
-      const subtitleParts = [tempTpl, humTpl, lightsTpl, coversTpl].filter(Boolean);
-      const subtitle = subtitleParts.length ? subtitleParts.join('  ·  ') : '';
-
+    // ── Raumtitel (schlicht) ────────────────────────────────────────────────────
+    roomTitle(area, aOpts) {
       return {
-        type: 'custom:mushroom-template-card',
-        primary: aOpts?.title_override || area.name,
-        secondary: subtitle,
+        type: 'custom:mushroom-title-card',
+        title: aOpts?.title_override || area.name,
+        subtitle: '',
+      };
+    },
+
+    // ── Chip-Header ─────────────────────────────────────────────────────────────
+    // Gibt eine mushroom-chips-card zurück mit dynamischen Template-Chips.
+    // Chips werden nur erzeugt wenn die nötigen Entities vorhanden sind.
+    roomChipsHeader(area, aOpts, roomEntities, hass) {
+      const chips = [];
+
+      // 1. Raumname-Chip (navigiert zurück zur Übersicht / dient als Titel)
+      chips.push({
+        type: 'template',
         icon: aOpts?.icon_override || area.icon || 'mdi:home',
-        icon_color: lights.length
-          ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state', 'on') | list | count > 0 else 'grey' }}`
-          : 'grey',
+        icon_color: 'blue',
+        content: aOpts?.title_override || area.name,
         tap_action: { action: 'none' },
+      });
+
+      // 2. Temperatur-Chip
+      const tempId = aOpts?.primary_sensors?.temperature;
+      const climId = (roomEntities.climate || [])[0];
+      if (tempId && hass.states[tempId]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:thermometer',
+          icon_color: 'red',
+          content: `{{ states('${tempId}') | float(0) | round(1) }} °C`,
+          tap_action: { action: 'more-info', entity: tempId },
+        });
+      } else if (climId && hass.states[climId]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:thermometer',
+          icon_color: 'red',
+          content: `{{ state_attr('${climId}', 'current_temperature') | round(1) }} °C`,
+          tap_action: { action: 'more-info', entity: climId },
+        });
+      }
+
+      // 3. Luftfeuchte-Chip
+      const humId = aOpts?.primary_sensors?.humidity;
+      if (humId && hass.states[humId]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:water-percent',
+          icon_color: 'blue',
+          content: `{{ states('${humId}') | float(0) | round(0) }} %`,
+          tap_action: { action: 'more-info', entity: humId },
+        });
+      }
+
+      // 4. Helligkeit-Chip (Illuminance)
+      const luxId = aOpts?.primary_sensors?.illuminance;
+      if (luxId && hass.states[luxId]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:brightness-5',
+          icon_color: 'yellow',
+          content: `{{ states('${luxId}') | float(0) | round(0) }} lx`,
+          tap_action: { action: 'more-info', entity: luxId },
+        });
+      }
+
+      // 5. CO₂-Chip
+      const co2Id = aOpts?.primary_sensors?.co2;
+      if (co2Id && hass.states[co2Id]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:molecule-co2',
+          icon_color: `{{ 'red' if states('${co2Id}') | float(0) > 1200 else ('orange' if states('${co2Id}') | float(0) > 800 else 'green') }}`,
+          content: `{{ states('${co2Id}') | float(0) | round(0) }} ppm`,
+          tap_action: { action: 'more-info', entity: co2Id },
+        });
+      }
+
+      // 6. Lichter-Chip
+      const lights = roomEntities.light || [];
+      if (lights.length > 0) {
+        const idList = lights.map(id => `'${id}'`).join(',');
+        chips.push({
+          type: 'template',
+          icon: 'mdi:lightbulb-group',
+          icon_color: `{{ 'amber' if [${idList}] | select('is_state', 'on') | list | count > 0 else 'grey' }}`,
+          content: `{{ [${idList}] | select('is_state', 'on') | list | count }} / ${lights.length}`,
+          tap_action: { action: 'none' },
+        });
+      }
+
+      // 7. Rollos-Chip (nur wenn welche offen)
+      const covers = roomEntities.cover || [];
+      if (covers.length > 0) {
+        const idList = covers.map(id => `'${id}'`).join(',');
+        chips.push({
+          type: 'template',
+          icon: 'mdi:window-shutter-open',
+          icon_color: `{{ 'blue' if [${idList}] | select('is_state', 'open') | list | count > 0 else 'grey' }}`,
+          content: `{{ [${idList}] | select('is_state', 'open') | list | count }} / ${covers.length}`,
+          tap_action: { action: 'none' },
+        });
+      }
+
+      // 8. Klima-Chip (Soll-Temperatur wenn Climate vorhanden)
+      if (climId && hass.states[climId]) {
+        chips.push({
+          type: 'template',
+          icon: 'mdi:thermostat',
+          icon_color: `{{ 'orange' if is_state('${climId}', 'heat') or is_state('${climId}', 'heat_cool') else 'blue' }}`,
+          content: `{{ state_attr('${climId}', 'temperature') | round(1) }} °C`,
+          tap_action: { action: 'more-info', entity: climId },
+        });
+      }
+
+      // Mindestens 1 Chip nötig (Raumname ist immer da)
+      return {
+        type: 'custom:mushroom-chips-card',
+        chips,
+        alignment: 'start',
         card_mod: {
           style: `
             ha-card {
-              --ha-card-border-radius: 16px;
-              background: linear-gradient(135deg,
-                var(--primary-color, #41BDF5) 0%,
-                color-mix(in srgb, var(--primary-color, #41BDF5) 60%, var(--card-background-color)) 100%
-              ) !important;
-              color: white !important;
-              padding: 4px 0 !important;
+              background: none !important;
+              box-shadow: none !important;
+              padding: 4px 0 8px !important;
             }
-            .primary   { color: white !important; font-size: 22px !important; font-weight: 700 !important; }
-            .secondary { color: rgba(255,255,255,0.85) !important; font-size: 13px !important; }
           `,
         },
       };
@@ -296,7 +374,7 @@
           ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'grey' }}`
           : 'grey',
         secondary: tempId
-          ? `{{ states('${tempId}') | float(0) | round(1) }}\u00b0C`
+          ? `{{ states('${tempId}') | float(0) | round(1) }} °C`
           : (aOpts?.subtitle || ''),
         tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
         fill_container: false,
@@ -304,39 +382,36 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 9 — VIEW BUILDERS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
-  const DOMAIN_TITLES = { light:'Beleuchtung', cover:'Rollos & Vorh\u00e4nge', climate:'Klima', fan:'Ventilatoren', switch:'Schalter', media_player:'Medien', sensor:'Sensoren', binary_sensor:'Status', camera:'Kameras' };
+  const DOMAIN_TITLES = { light:'Beleuchtung', cover:'Rollos & Vorhänge', climate:'Klima', fan:'Ventilatoren', switch:'Schalter', media_player:'Medien', sensor:'Sensoren', binary_sensor:'Status', camera:'Kameras' };
   const DOMAIN_ICONS  = { light:'mdi:lightbulb', cover:'mdi:window-shutter', climate:'mdi:thermometer', fan:'mdi:fan', switch:'mdi:toggle-switch', media_player:'mdi:speaker', sensor:'mdi:eye', binary_sensor:'mdi:motion-sensor', camera:'mdi:camera' };
   const RELEVANT_SENSOR_CLASSES = new Set(['temperature','humidity','illuminance','motion','occupancy','door','window','battery']);
   const PRIMARY_SENSOR_CLASSES = [
-    { key: 'temperature', label: 'Temperatur',  icon: 'mdi:thermometer',   unit: '\u00b0C' },
+    { key: 'temperature', label: 'Temperatur',  icon: 'mdi:thermometer',   unit: '°C' },
     { key: 'humidity',    label: 'Luftfeuchte', icon: 'mdi:water-percent', unit: '%'  },
     { key: 'illuminance', label: 'Helligkeit',  icon: 'mdi:brightness-5',  unit: 'lx' },
-    { key: 'co2',         label: 'CO\u2082',    icon: 'mdi:molecule-co2',  unit: 'ppm' },
-    { key: 'pm25',        label: 'PM2.5',       icon: 'mdi:air-filter',    unit: '\u03bcg/m\u00b3' },
+    { key: 'co2',         label: 'CO₂',         icon: 'mdi:molecule-co2',  unit: 'ppm' },
+    { key: 'pm25',        label: 'PM2.5',       icon: 'mdi:air-filter',    unit: 'µg/m³' },
   ];
 
-  // ── Spalten-Konfiguration ────────────────────────────────────────────────
-  // Welche Domains kommen in welche Spalte, und wie viele Spalten breit
+  // ── Spalten-Konfiguration ──────────────────────────────────────────────────────
   const COLUMN_DEFS = [
-    { domains: ['light'],                    title: 'Beleuchtung',    icon: 'mdi:lightbulb',       cols: 1 },
-    { domains: ['cover'],                    title: 'Rollos',         icon: 'mdi:window-shutter',  cols: 1 },
-    { domains: ['climate', 'fan'],           title: 'Klima',          icon: 'mdi:thermometer',     cols: 1 },
-    { domains: ['media_player'],             title: 'Medien',         icon: 'mdi:speaker',         cols: 1 },
-    { domains: ['switch'],                   title: 'Schalter',       icon: 'mdi:toggle-switch',   cols: 1 },
-    { domains: ['sensor','binary_sensor'],   title: 'Sensoren',       icon: 'mdi:eye',             cols: 1 },
-    { domains: ['camera'],                   title: 'Kameras',        icon: 'mdi:camera',          cols: 2 },
+    { domains: ['light'],                    title: 'Beleuchtung',   icon: 'mdi:lightbulb',       cols: 1 },
+    { domains: ['cover'],                    title: 'Rollos',        icon: 'mdi:window-shutter',  cols: 1 },
+    { domains: ['climate', 'fan'],           title: 'Klima',         icon: 'mdi:thermometer',     cols: 1 },
+    { domains: ['media_player'],             title: 'Medien',        icon: 'mdi:speaker',         cols: 1 },
+    { domains: ['switch'],                   title: 'Schalter',      icon: 'mdi:toggle-switch',   cols: 1 },
+    { domains: ['sensor','binary_sensor'],   title: 'Sensoren',      icon: 'mdi:eye',             cols: 1 },
+    { domains: ['camera'],                   title: 'Kameras',       icon: 'mdi:camera',          cols: 2 },
   ];
 
-  // Baut eine einzelne Domain-Spalte als vertical-stack
   const buildColumn = (colDef, roomEntities, hass) => {
     const colCards = [];
 
-    // Spalten-Header
     colCards.push({
       type: 'custom:mushroom-title-card',
       title: colDef.title,
@@ -348,17 +423,10 @@
       if (!ids.length) continue;
 
       if (domain === 'light') {
-        // Gruppe + einzelne Entities
-        if (ids.length > 1) {
-          const gc = Cards.groupControl(ids, 'light');
-          if (gc) colCards.push(gc);
-        }
+        if (ids.length > 1) { const gc = Cards.groupControl(ids, 'light'); if (gc) colCards.push(gc); }
         ids.forEach(id => colCards.push(Cards.light(id)));
       } else if (domain === 'cover') {
-        if (ids.length > 1) {
-          const gc = Cards.groupControl(ids, 'cover');
-          if (gc) colCards.push(gc);
-        }
+        if (ids.length > 1) { const gc = Cards.groupControl(ids, 'cover'); if (gc) colCards.push(gc); }
         ids.forEach(id => colCards.push(Cards.cover(id)));
       } else if (domain === 'climate') {
         ids.forEach(id => colCards.push(Cards.climate(id)));
@@ -374,13 +442,11 @@
       }
     }
 
-    // Leere Spalte (nur Header) → nicht rendern
     if (colCards.length <= 1) return null;
-
     return { type: 'vertical-stack', cards: colCards };
   };
 
-  // ── OVERVIEW VIEW ────────────────────────────────────────────────────────
+  // ── OVERVIEW VIEW ──────────────────────────────────────────────────────────────
 
   const OverviewView = {
     generate(hass, config, registry, basePath) {
@@ -388,16 +454,13 @@
         const { entities = [], devices = [], areas = [] } = registry;
         const cards = [];
 
-        // Begrüßungs-Header
         const hour = new Date().getHours();
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
         cards.push(Cards.title(greeting, 'Smart Home Übersicht'));
 
-        // Wetter
         const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
         if (weatherEntity) cards.push(Cards.weather(weatherEntity));
 
-        // Raum-Kacheln
         if (config.show_areas !== false) {
           const deviceAreaMap = R.buildDeviceAreaMap(devices);
           const filteredAreas = R.filterAreas(areas);
@@ -409,10 +472,7 @@
               const lightIndicator = aOpts?.light_indicator || lights[0]?.entity_id;
               const enrichedConfig = {
                 ...config,
-                areas_options: {
-                  ...config?.areas_options,
-                  [area.area_id]: { ...aOpts, light_indicator: lightIndicator },
-                },
+                areas_options: { ...config?.areas_options, [area.area_id]: { ...aOpts, light_indicator: lightIndicator } },
               };
               return Cards.roomButton(area, basePath, enrichedConfig);
             });
@@ -420,7 +480,6 @@
           }
         }
 
-        // Sicherheit
         if (config.show_security !== false) {
           const sec = Collectors.collectSecurity(hass, entities);
           if (sec.locks.length || sec.doors.length || sec.windows.length || sec.alarm) {
@@ -434,7 +493,6 @@
           }
         }
 
-        // Batterie
         if (config.show_battery_status !== false) {
           const bats = Collectors.collectBatteries(hass, entities);
           if (bats.critical.length || bats.low.length) {
@@ -445,14 +503,14 @@
         }
 
         if (!cards.length) cards.push({ type: 'markdown', content: 'Dashboard wird geladen...' });
-        return { title: '\u00dcbersicht', path: 'overview', icon: 'mdi:home', cards };
+        return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards };
       } catch (e) {
-        return { title: '\u00dcbersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
+        return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
       }
     },
   };
 
-  // ── ROOM VIEW ────────────────────────────────────────────────────────────
+  // ── ROOM VIEW ──────────────────────────────────────────────────────────────────
 
   const RoomView = {
     generate(areaId, hass, config, registry) {
@@ -461,33 +519,19 @@
         const area = areas.find(a => a?.area_id === areaId);
         if (!area) return { title: areaId, path: areaId, cards: [Cards.error('Raum nicht gefunden: ' + areaId)] };
 
-        const aOpts       = config?.areas_options?.[areaId] || {};
+        const aOpts        = config?.areas_options?.[areaId] || {};
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
 
         const cards = [];
 
-        // ── 1. Dynamischer Header ──────────────────────────────────────────
-        cards.push(Cards.roomHeader(area, aOpts, roomEntities));
+        // ── HEADER-BEREICH (losgelöst von Spalten) ─────────────────────────────
+        // Raumtitel
+        cards.push(Cards.roomTitle(area, aOpts));
 
-        // ── 2. Sensor-Chips (führende Sensoren) ────────────────────────────
-        const chipCards = [];
-        for (const sc of PRIMARY_SENSOR_CLASSES) {
-          const primaryId = aOpts?.primary_sensors?.[sc.key];
-          if (primaryId && hass.states[primaryId]) {
-            chipCards.push(Cards.entity(primaryId, { icon: sc.icon }));
-          }
-        }
-        if (chipCards.length) {
-          cards.push({
-            type: 'grid',
-            cards: chipCards,
-            columns: Math.min(chipCards.length, 4),
-            square: false,
-          });
-        }
+        // Chip-Leiste mit dynamischen Badges
+        cards.push(Cards.roomChipsHeader(area, aOpts, roomEntities, hass));
 
-        // ── 3. Spalten pro Domain-Gruppe ───────────────────────────────────
-        // Prüfen welche Spalten Inhalt haben
+        // ── SPALTEN-BEREICH ────────────────────────────────────────────────────
         const populatedCols = [];
         for (const colDef of COLUMN_DEFS) {
           const hasContent = colDef.domains.some(d => {
@@ -504,13 +548,11 @@
         }
 
         if (populatedCols.length === 0) {
-          cards.push({ type: 'markdown', content: 'Keine Ger\u00e4te in diesem Raum.' });
+          cards.push({ type: 'markdown', content: 'Keine Geräte in diesem Raum.' });
         } else if (populatedCols.length === 1) {
-          // Einzelspalte: direkt einfügen
           cards.push(populatedCols[0].stack);
         } else {
-          // Mehrere Spalten → horizontal-stack oder grid
-          // Bis zu 3 Spalten nebeneinander, dann umbrechen
+          // Max. 3 Spalten nebeneinander, dann umbrechen
           const chunks = [];
           let chunk = [];
           for (const col of populatedCols) {
@@ -520,11 +562,8 @@
           if (chunk.length) chunks.push(chunk);
 
           for (const ch of chunks) {
-            if (ch.length === 1) {
-              cards.push(ch[0]);
-            } else {
-              cards.push({ type: 'horizontal-stack', cards: ch });
-            }
+            if (ch.length === 1) cards.push(ch[0]);
+            else                 cards.push({ type: 'horizontal-stack', cards: ch });
           }
         }
 
@@ -540,7 +579,7 @@
     },
   };
 
-  // ── SETTINGS VIEW ────────────────────────────────────────────────────────
+  // ── SETTINGS VIEW ─────────────────────────────────────────────────────────────
 
   const SettingsView = {
     generate(hass, config, registry, basePath) {
@@ -558,6 +597,7 @@
           '  areas_options:', '    <area_id>:', '      title_override: "Mein Raum"',
           '      icon_override: mdi:sofa', '      primary_sensors:',
           '        temperature: sensor.raum_temperatur', '        humidity: sensor.raum_feuchte',
+          '        illuminance: sensor.raum_helligkeit', '        co2: sensor.raum_co2',
           '      groups_options:', '        <domain>:', '          hidden:', '            - entity.id',
           '```',
         ].join('\n') });
@@ -572,15 +612,15 @@
             if (!roomEntities[domain]?.length) continue;
             hasContent = true;
             const hiddenNow = R.getHiddenEntities(config, area.area_id, domain);
-            yamlLines.push('      groups_options:', `        ${domain}:`, '          # Verf\u00fcgbare Entities:');
-            roomEntities[domain].forEach(id => yamlLines.push(`          # - ${id}${hiddenNow.includes(id) ? '  # \u2190 ausgeblendet' : ''}`));
+            yamlLines.push('      groups_options:', `        ${domain}:`, '          # Verfügbare Entities:');
+            roomEntities[domain].forEach(id => yamlLines.push(`          # - ${id}${hiddenNow.includes(id) ? '  # ← ausgeblendet' : ''}`));
             yamlLines.push(hiddenNow.length ? '          hidden:' : '          hidden: []');
             hiddenNow.forEach(id => yamlLines.push(`            - ${id}`));
           }
           if (hasContent) cards.push({ type: 'markdown', content: `### ${area.name}\n\`\`\`yaml\nareas_options:\n${yamlLines.join('\n')}\n\`\`\`` });
         }
         cards.push(Cards.title('System-Info'));
-        cards.push({ type: 'markdown', content: ['| | |','|---|---|',`| **Version** | ${VERSION} |`,`| **url_path** | \`${urlPath}\` |`,`| **Bereiche** | ${areas.length} |`,`| **Ger\u00e4te** | ${devices.length} |`,`| **Entities** | ${entities.length} |`].join('\n') });
+        cards.push({ type: 'markdown', content: ['| | |','|---|---|',`| **Version** | ${VERSION} |`,`| **url_path** | \`${urlPath}\` |`,`| **Bereiche** | ${areas.length} |`,`| **Geräte** | ${devices.length} |`,`| **Entities** | ${entities.length} |`].join('\n') });
         return { title: 'Einstellungen', path: 'settings', icon: 'mdi:cog', cards };
       } catch (e) {
         return { title: 'Einstellungen', path: 'settings', icon: 'mdi:cog', cards: [Cards.error(e.message)] };
@@ -588,9 +628,9 @@
     },
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 10 — CONFIG EDITOR
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const EDITOR_STYLES = `
     :host { display: block; font-family: var(--primary-font-family, sans-serif); color: var(--primary-text-color); }
@@ -779,7 +819,7 @@
       let areasHtml = '';
 
       if (this._loading) {
-        areasHtml = `<div class="loading"><div class="spinner"></div>Lade R\u00e4ume und Ger\u00e4te\u2026</div>`;
+        areasHtml = `<div class="loading"><div class="spinner"></div>Lade Räume und Geräte…</div>`;
       } else if (this._registry) {
         const { areas = [], entities = [], devices = [] } = this._registry;
         const filtered = R.filterAreas(areas);
@@ -850,7 +890,7 @@
                 <div class="opt-row">
                   <div class="opt-label"><ha-icon icon="${sc.icon}"></ha-icon>${sc.label}</div>
                   <select class="opt-select" data-area="${aId}" data-sensor-class="${sc.key}">
-                    <option value="">\u2013 kein f\u00fchrender Sensor \u2013</option>
+                    <option value="">– kein führender Sensor –</option>
                     ${options}
                   </select>
                 </div>`;
@@ -870,21 +910,21 @@
                 </div>
                 ${sensorDropdowns ? `
                   <div class="opt-row">
-                    <div class="opt-label" style="margin-bottom:10px"><ha-icon icon="mdi:star"></ha-icon>F\u00fchrende Sensoren</div>
-                    <div class="opt-hint" style="margin-bottom:8px">Werden im Raumheader und als Chips angezeigt.</div>
+                    <div class="opt-label" style="margin-bottom:10px"><ha-icon icon="mdi:star"></ha-icon>Führende Sensoren (Chip-Header)</div>
+                    <div class="opt-hint" style="margin-bottom:8px">Werden als Badges im Raum-Header angezeigt.</div>
                     ${sensorDropdowns}
                   </div>` : ''}
                 <div class="opt-row">
                   <div class="opt-label"><ha-icon icon="mdi:lightbulb-outline"></ha-icon>Licht-Indikator</div>
                   <select class="opt-select" data-area="${aId}" data-opt-key="light_indicator">
-                    <option value="">\u2013 automatisch \u2013</option>
+                    <option value="">– automatisch –</option>
                     ${(allByDomain['light'] || []).map(id => {
                       const entObj = entities.find(e => e.entity_id === id);
                       const fname  = entObj?.name || entObj?.original_name || id;
                       return `<option value="${id}" ${aOpts.light_indicator === id ? 'selected' : ''}>${fname}</option>`;
                     }).join('')}
                   </select>
-                  <div class="opt-hint">F\u00e4rbt Raum-Kachel amber wenn Licht an</div>
+                  <div class="opt-hint">Färbt Raum-Kachel amber wenn Licht an</div>
                 </div>
               </div>`;
 
@@ -902,11 +942,11 @@
                 </div>
                 <div class="area-content${isOpen ? ' open' : ''}" data-area="${aId}">
                   <div class="tabs">
-                    <button class="tab-btn${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">\uD83D\uDCA1 Ger\u00e4te</button>
-                    <button class="tab-btn${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">\u2699\uFE0F Raumoptionen</button>
+                    <button class="tab-btn${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">💡 Geräte</button>
+                    <button class="tab-btn${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">⚙️ Raumoptionen</button>
                   </div>
                   <div class="tab-pane${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">
-                    ${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Ger\u00e4te in diesem Raum.</div>'}
+                    ${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Geräte in diesem Raum.</div>'}
                   </div>
                   <div class="tab-pane${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">
                     ${roomOptsHtml}
@@ -921,18 +961,18 @@
         <style>${EDITOR_STYLES}</style>
         <div class="section-header"><ha-icon icon="mdi:tune"></ha-icon>Allgemein</div>
         <div class="general-row">
-          <label>Raum-\u00dcbersicht anzeigen<span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span></label>
+          <label>Raum-Übersicht anzeigen<span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span></label>
           <ha-switch id="sw-areas" ${showAreas ? 'checked' : ''}></ha-switch>
         </div>
         <div class="general-row">
-          <label>Sicherheits-Widget anzeigen<span class="sub">Schl\u00f6sser, T\u00fcren, Fenster, Alarm</span></label>
+          <label>Sicherheits-Widget anzeigen<span class="sub">Schlösser, Türen, Fenster, Alarm</span></label>
           <ha-switch id="sw-security" ${showSecurity ? 'checked' : ''}></ha-switch>
         </div>
         <div class="general-row">
-          <label>Batterie-Warnungen anzeigen<span class="sub">Ger\u00e4te mit niedrigem Akkustand</span></label>
+          <label>Batterie-Warnungen anzeigen<span class="sub">Geräte mit niedrigem Akkustand</span></label>
           <ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch>
         </div>
-        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>R\u00e4ume</div>
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
       `;
@@ -950,9 +990,9 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // MODUL 11 — DASHBOARD STRATEGY (Entry Point)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   class L30NEYNDashboardStrategy {
     static async generate(config, hass) {
@@ -990,9 +1030,9 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
   // REGISTER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   const register = (name, cls) => {
     try { customElements.define(name, cls); }
