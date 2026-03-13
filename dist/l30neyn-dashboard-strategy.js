@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.6.1
+ * @version 1.6.2
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.6.1';
+  const VERSION = '1.6.2';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -146,6 +146,14 @@
       }
       return result;
     },
+    // Liefert alle Sensor-Entities eines Raums nach device_class gefiltert
+    getSensorsByClass(areaId, entities, devices, deviceClass) {
+      const deviceAreaMap = RegistryHelpers.buildDeviceAreaMap(devices);
+      return RegistryHelpers.filterAvailable(
+        RegistryHelpers.filterByArea(entities, areaId, deviceAreaMap)
+      ).filter(e => e?.entity_id?.startsWith('sensor.'));
+      // device_class wird im Render gegen hass.states geprueft
+    },
   };
   const R = RegistryHelpers;
 
@@ -209,11 +217,25 @@
     error(error, details = '') {
       return { type: 'markdown', content: `# \u26a0\ufe0f Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
     },
-    roomButton(area, basePath, lightEntity) {
+    roomButton(area, basePath, config) {
+      // Führende Sensor-Entities für Subtitle im Raumbutton
+      const aOpts = config?.areas_options?.[area.area_id];
+      const tempId = aOpts?.primary_sensors?.temperature;
+      const humId  = aOpts?.primary_sensors?.humidity;
+      const lightId = aOpts?.primary_sensors?.illuminance;
+      // icon_color basiert auf erstem sichtbaren Licht ODER area-config
+      const lightEntityId = aOpts?.light_indicator;
       return {
         type: 'custom:mushroom-template-card',
-        primary: area.name, icon: area.icon || 'mdi:home',
-        icon_color: lightEntity ? '{{ "amber" if is_state("' + lightEntity + '", "on") else "grey" }}' : 'grey',
+        primary: area.name,
+        icon: aOpts?.icon_override || area.icon || 'mdi:home',
+        icon_color: lightEntityId
+          ? '{{ "amber" if is_state("' + lightEntityId + '", "on") else "grey" }}'
+          : 'grey',
+        // Subtitle zeigt Temperatur wenn konfiguriert
+        secondary: tempId
+          ? '{{ states("' + tempId + '") | float(0) | round(1) }}\u00b0C'
+          : (aOpts?.subtitle || ''),
         tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
         fill_container: false,
       };
@@ -243,6 +265,15 @@
   const DOMAIN_ICONS  = { light:'mdi:lightbulb', cover:'mdi:window-shutter', climate:'mdi:thermometer', fan:'mdi:fan', switch:'mdi:toggle-switch', media_player:'mdi:speaker', sensor:'mdi:eye', binary_sensor:'mdi:motion-sensor', camera:'mdi:camera' };
   const RELEVANT_SENSOR_CLASSES = new Set(['temperature','humidity','illuminance','motion','occupancy','door','window','battery']);
 
+  // Führende Sensor-Klassen die im Raumtitel als Chips angezeigt werden
+  const PRIMARY_SENSOR_CLASSES = [
+    { key: 'temperature',  label: 'Temperatur',    icon: 'mdi:thermometer',      unit: '\u00b0C' },
+    { key: 'humidity',     label: 'Luftfeuchte',   icon: 'mdi:water-percent',    unit: '%'  },
+    { key: 'illuminance',  label: 'Helligkeit',    icon: 'mdi:brightness-5',     unit: 'lx' },
+    { key: 'co2',          label: 'CO\u2082',      icon: 'mdi:molecule-co2',     unit: 'ppm' },
+    { key: 'pm25',         label: 'PM2.5',         icon: 'mdi:air-filter',       unit: '\u03bcg/m\u00b3' },
+  ];
+
   const OverviewView = {
     generate(hass, config, registry, basePath) {
       try {
@@ -260,7 +291,11 @@
             const areaButtons = filteredAreas.map(area => {
               const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
               const lights = ae.filter(e => e?.entity_id?.startsWith('light.'));
-              return Cards.roomButton(area, basePath, lights[0]?.entity_id);
+              // Licht-Indikator: erst aus area-config, dann erster Licht-Entity
+              const aOpts = config?.areas_options?.[area.area_id];
+              const lightIndicator = aOpts?.light_indicator || lights[0]?.entity_id;
+              const cardConfig = { ...config, areas_options: { ...config?.areas_options, [area.area_id]: { ...(aOpts || {}), light_indicator: lightIndicator } } };
+              return Cards.roomButton(area, basePath, cardConfig);
             });
             cards.push({ type: 'grid', cards: areaButtons, columns: 3, square: false });
           }
@@ -299,13 +334,49 @@
         const { entities = [], devices = [], areas = [] } = registry;
         const area = areas.find(a => a?.area_id === areaId);
         if (!area) return { title: areaId, path: areaId, cards: [Cards.error('Raum nicht gefunden: ' + areaId)] };
+
+        const aOpts = config?.areas_options?.[areaId] || {};
         const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
         const cards = [];
+
+        // Subtitle: führende Sensoren anzeigen
+        const subtitleParts = [];
+        for (const sc of PRIMARY_SENSOR_CLASSES) {
+          const primaryId = aOpts?.primary_sensors?.[sc.key];
+          if (primaryId && hass.states[primaryId]) {
+            const val = hass.states[primaryId].state;
+            subtitleParts.push(`${sc.icon.replace('mdi:', '')} ${val}${sc.unit}`);
+          }
+        }
+        // Fallback: Anzahl Lichter
         const lightsOn    = (roomEntities.light || []).filter(id => hass.states[id]?.state === 'on').length;
         const totalLights = (roomEntities.light || []).length;
-        cards.push({ type: 'custom:mushroom-title-card', title: area.name, subtitle: totalLights ? `${lightsOn} von ${totalLights} Lichtern an` : '', icon: area.icon || 'mdi:home' });
+        const subtitle = subtitleParts.length
+          ? subtitleParts.join('  ·  ')
+          : (totalLights ? `${lightsOn} von ${totalLights} Lichtern an` : '');
+
+        cards.push({
+          type: 'custom:mushroom-title-card',
+          title: aOpts.title_override || area.name,
+          subtitle,
+          icon: aOpts.icon_override || area.icon || 'mdi:home',
+        });
+
+        // Chip-Reihe: führende Sensor-Werte als chips (nur wenn primary_sensors gesetzt)
+        const chipCards = [];
+        for (const sc of PRIMARY_SENSOR_CLASSES) {
+          const primaryId = aOpts?.primary_sensors?.[sc.key];
+          if (primaryId && hass.states[primaryId]) {
+            chipCards.push(Cards.entity(primaryId, { icon: sc.icon }));
+          }
+        }
+        if (chipCards.length) {
+          cards.push({ type: 'grid', cards: chipCards, columns: chipCards.length > 3 ? 4 : chipCards.length, square: false });
+        }
+
         if ((roomEntities.light || []).length > 1) { const gc = Cards.groupControl(roomEntities.light, 'light'); if (gc) cards.push(gc); }
         if ((roomEntities.cover || []).length > 1) { const gc = Cards.groupControl(roomEntities.cover, 'cover'); if (gc) cards.push(gc); }
+
         for (const domain of DOMAIN_ORDER) {
           if (!roomEntities[domain]?.length) continue;
           cards.push(Cards.section(DOMAIN_TITLES[domain] || domain));
@@ -321,7 +392,8 @@
           }
           else roomEntities[domain].forEach(id => cards.push(Cards.entity(id)));
         }
-        return { title: area.name, path: areaId, icon: area.icon || 'mdi:home', cards: cards.length > 1 ? cards : [{ type: 'markdown', content: 'Keine Ger\u00e4te in diesem Raum.' }] };
+
+        return { title: aOpts.title_override || area.name, path: areaId, icon: aOpts.icon_override || area.icon || 'mdi:home', cards: cards.length > 1 ? cards : [{ type: 'markdown', content: 'Keine Ger\u00e4te in diesem Raum.' }] };
       } catch (e) {
         return { title: areaId, path: areaId, icon: 'mdi:home', cards: [Cards.error(e.message)] };
       }
@@ -341,7 +413,10 @@
           '', '```yaml',
           'strategy:', '  type: custom:l30neyn-dashboard-strategy',
           '  navigation:', `    dashboard_url_path: ${urlPath}`,
-          '  areas_options:', '    <area_id>:', '      groups_options:', '        <domain>:', '          hidden:', '            - entity.id',
+          '  areas_options:', '    <area_id>:', '      title_override: "Mein Raum"',
+          '      icon_override: mdi:sofa', '      primary_sensors:',
+          '        temperature: sensor.raum_temperatur', '        humidity: sensor.raum_feuchte',
+          '      groups_options:', '        <domain>:', '          hidden:', '            - entity.id',
           '```',
         ].join('\n') });
         const filteredAreas = R.filterAreas(areas);
@@ -372,237 +447,90 @@
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MODUL 10 — CONFIG EDITOR ("Dashboard bearbeiten"-Panel)
+  // MODUL 10 — CONFIG EDITOR
   // ═══════════════════════════════════════════════════════════════════════════
 
   const EDITOR_STYLES = `
-    :host {
-      display: block;
-      font-family: var(--primary-font-family, sans-serif);
-      color: var(--primary-text-color);
-    }
+    :host { display: block; font-family: var(--primary-font-family, sans-serif); color: var(--primary-text-color); }
 
-    /* ── Sektions-Überschriften ───────────────────────────── */
-    .section-header {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--secondary-text-color);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin: 24px 0 8px;
-      padding-bottom: 6px;
-      border-bottom: 2px solid var(--primary-color, #41BDF5);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .section-header { font-size: 11px; font-weight: 700; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-color, #41BDF5); display: flex; align-items: center; gap: 6px; }
     .section-header:first-of-type { margin-top: 0; }
     .section-header ha-icon { --mdi-icon-size: 16px; color: var(--primary-color, #41BDF5); }
 
-    /* ── Allgemein-Zeilen ─────────────────────────────────── */
-    .general-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      border-radius: 8px;
-      margin-bottom: 4px;
-      background: var(--secondary-background-color);
-      transition: background 0.15s;
-    }
+    .general-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; margin-bottom: 4px; background: var(--secondary-background-color); transition: background 0.15s; }
     .general-row:hover { background: var(--table-row-alternative-background-color, rgba(0,0,0,0.05)); }
     .general-row label { font-size: 14px; flex: 1; cursor: pointer; }
-    .general-row .sub  { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
+    .general-row .sub { font-size: 12px; color: var(--secondary-text-color); display: block; margin-top: 2px; }
     ha-switch { flex-shrink: 0; margin-left: 12px; }
 
-    /* ── Raum-Block ───────────────────────────────────────── */
-    .area-card {
-      border: 1px solid var(--divider-color);
-      border-radius: 12px;
-      margin-bottom: 10px;
-      overflow: hidden;
-      background: var(--card-background-color);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-      transition: box-shadow 0.2s;
-    }
+    /* ── Raum-Card ──────────────────────────────────────────── */
+    .area-card { border: 1px solid var(--divider-color); border-radius: 12px; margin-bottom: 10px; overflow: hidden; background: var(--card-background-color); box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: box-shadow 0.2s; }
     .area-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
-
-    /* Klickbarer Header zum Ein-/Ausklappen */
-    .area-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      cursor: pointer;
-      user-select: none;
-      background: var(--secondary-background-color);
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.2s, background 0.15s;
-    }
+    .area-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; background: var(--secondary-background-color); border-bottom: 1px solid transparent; transition: border-color 0.2s, background 0.15s; }
     .area-header:hover { background: var(--table-row-alternative-background-color, rgba(0,0,0,0.05)); }
-    .area-header.open  { border-bottom-color: var(--divider-color); }
-
-    .area-header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 15px;
-      font-weight: 600;
-    }
+    .area-header.open { border-bottom-color: var(--divider-color); }
+    .area-header-left { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
     .area-header-left ha-icon { --mdi-icon-size: 20px; color: var(--secondary-text-color); }
-
-    .area-header-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Badge: Anzahl ausgeblendeter Entities */
-    .badge {
-      font-size: 11px;
-      font-weight: 700;
-      background: var(--error-color, #db4437);
-      color: #fff;
-      border-radius: 10px;
-      padding: 1px 7px;
-      min-width: 18px;
-      text-align: center;
-      display: none;
-    }
+    .area-header-right { display: flex; align-items: center; gap: 8px; }
+    .badge { font-size: 11px; font-weight: 700; background: var(--error-color, #db4437); color: #fff; border-radius: 10px; padding: 1px 7px; display: none; }
     .badge.visible { display: inline-block; }
-
-    .chevron {
-      --mdi-icon-size: 20px;
-      color: var(--secondary-text-color);
-      transition: transform 0.25s;
-    }
+    .chevron { --mdi-icon-size: 20px; color: var(--secondary-text-color); transition: transform 0.25s; }
     .chevron.open { transform: rotate(180deg); }
+    .area-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+    .area-content.open { max-height: 4000px; }
 
-    /* Inhalt des Raum-Blocks */
-    .area-content {
-      padding: 0;
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease, padding 0.2s;
-    }
-    .area-content.open {
-      max-height: 2000px;
-      padding: 8px 0;
-    }
+    /* ── Tabs ──────────────────────────────────────────────── */
+    .tabs { display: flex; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); }
+    .tab-btn { flex: 1; padding: 9px 4px; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); text-align: center; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tab-btn.active { color: var(--primary-color, #41BDF5); border-bottom-color: var(--primary-color, #41BDF5); }
+    .tab-btn:hover:not(.active) { color: var(--primary-text-color); }
+    .tab-pane { display: none; padding: 12px 0 4px; }
+    .tab-pane.active { display: block; }
 
-    /* ── Domain-Gruppe ────────────────────────────────────── */
-    .domain-block {
-      padding: 6px 16px 10px;
-    }
-
-    .domain-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid var(--divider-color);
-    }
-
-    .domain-header-left {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--secondary-text-color);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+    /* ── Geräte-Tab ────────────────────────────────────────── */
+    .domain-block { padding: 4px 16px 10px; }
+    .domain-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--divider-color); }
+    .domain-header-left { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.5px; }
     .domain-header-left ha-icon { --mdi-icon-size: 14px; }
+    .domain-all-btn { font-size: 11px; color: var(--primary-color, #41BDF5); cursor: pointer; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--primary-color, #41BDF5); background: transparent; transition: background 0.15s, color 0.15s; white-space: nowrap; }
+    .domain-all-btn:hover { background: var(--primary-color, #41BDF5); color: #fff; }
+    .entity-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; }
+    .entity-row + .entity-row { border-top: 1px solid var(--divider-color); }
+    .entity-label { flex: 1; min-width: 0; }
+    .entity-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .entity-id-small { font-size: 11px; font-family: monospace; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* "Alle" Toggle für eine ganze Domain */
-    .domain-all-btn {
-      font-size: 11px;
-      color: var(--primary-color, #41BDF5);
-      cursor: pointer;
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid var(--primary-color, #41BDF5);
-      background: transparent;
-      transition: background 0.15s, color 0.15s;
-      white-space: nowrap;
-    }
-    .domain-all-btn:hover {
-      background: var(--primary-color, #41BDF5);
-      color: #fff;
-    }
+    /* ── Raumoptionen-Tab ──────────────────────────────────── */
+    .room-opts { padding: 8px 16px 12px; }
+    .opt-row { margin-bottom: 14px; }
+    .opt-label { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+    .opt-label ha-icon { --mdi-icon-size: 14px; }
+    .opt-select { width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); font-size: 13px; font-family: inherit; cursor: pointer; }
+    .opt-select:focus { outline: none; border-color: var(--primary-color, #41BDF5); }
+    .opt-input { width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); font-size: 13px; font-family: inherit; box-sizing: border-box; }
+    .opt-input:focus { outline: none; border-color: var(--primary-color, #41BDF5); }
+    .opt-hint { font-size: 11px; color: var(--secondary-text-color); margin-top: 3px; }
+    .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 400px) { .sensor-grid { grid-template-columns: 1fr; } }
 
-    /* ── Entity-Zeile ─────────────────────────────────────── */
-    .entity-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 5px 0;
-    }
-    .entity-row + .entity-row {
-      border-top: 1px solid var(--divider-color);
-    }
-    .entity-label {
-      flex: 1;
-      min-width: 0;
-    }
-    .entity-name {
-      font-size: 13px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .entity-id-small {
-      font-size: 11px;
-      font-family: monospace;
-      color: var(--secondary-text-color);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* ── Lade-Placeholder ─────────────────────────────────── */
-    .loading {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--secondary-text-color);
-      font-size: 14px;
-      padding: 16px 0;
-    }
+    /* ── Misc ──────────────────────────────────────────────── */
+    .loading { display: flex; align-items: center; gap: 8px; color: var(--secondary-text-color); font-size: 14px; padding: 16px 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      width: 18px; height: 18px;
-      border: 2px solid var(--divider-color);
-      border-top-color: var(--primary-color, #41BDF5);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
-    }
-
-    /* ── Footer ───────────────────────────────────────────── */
-    .editor-footer {
-      font-size: 11px;
-      color: var(--disabled-text-color);
-      text-align: right;
-      margin-top: 20px;
-      padding-top: 8px;
-      border-top: 1px solid var(--divider-color);
-    }
+    .spinner { width: 18px; height: 18px; border: 2px solid var(--divider-color); border-top-color: var(--primary-color, #41BDF5); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+    .editor-footer { font-size: 11px; color: var(--disabled-text-color); text-align: right; margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--divider-color); }
   `;
 
   class L30NEYNDashboardStrategyEditor extends HTMLElement {
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-      this._config   = {};
-      this._hass     = null;
-      this._registry = null;
-      this._loading  = true;
-      // Merkt sich welche Raum-Akkordeons offen sind (area_id → bool)
+      this._config    = {};
+      this._hass      = null;
+      this._registry  = null;
+      this._loading   = true;
       this._openAreas = new Set();
+      // Aktiver Tab pro Raum: area_id → 'devices' | 'options'
+      this._activeTab = new Map();
     }
 
     set hass(hass) {
@@ -618,28 +546,52 @@
     async _loadRegistry() {
       this._loading = true;
       this._render();
-      try {
-        this._registry = await loadRegistryData(this._hass);
-      } catch (e) {
-        this._registry = { areas: [], devices: [], entities: [], source: 'error' };
-      }
+      try { this._registry = await loadRegistryData(this._hass); }
+      catch (e) { this._registry = { areas: [], devices: [], entities: [], source: 'error' }; }
       this._loading = false;
       this._render();
     }
 
+    // ── Config-Mutationen ──────────────────────────────────────
+
     _setConfigValue(key, value) {
       this._config = { ...this._config, [key]: value };
       this._fireConfigChanged();
-      // kein _render() nötig – HA re-setzt setConfig nach config-changed
+    }
+
+    _setAreaOption(areaId, key, value) {
+      const cfg = JSON.parse(JSON.stringify(this._config));
+      cfg.areas_options        ??= {};
+      cfg.areas_options[areaId] ??= {};
+      if (value === '' || value === null || value === undefined) {
+        delete cfg.areas_options[areaId][key];
+      } else {
+        cfg.areas_options[areaId][key] = value;
+      }
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
+    }
+
+    _setPrimarySensor(areaId, sensorClass, entityId) {
+      const cfg = JSON.parse(JSON.stringify(this._config));
+      cfg.areas_options              ??= {};
+      cfg.areas_options[areaId]       ??= {};
+      cfg.areas_options[areaId].primary_sensors ??= {};
+      if (entityId) cfg.areas_options[areaId].primary_sensors[sensorClass] = entityId;
+      else          delete cfg.areas_options[areaId].primary_sensors[sensorClass];
+      this._config = cfg;
+      this._render();
+      this._fireConfigChanged();
     }
 
     _toggleEntityHidden(areaId, domain, entityId, hidden) {
       const cfg = JSON.parse(JSON.stringify(this._config));
-      cfg.areas_options                                             ??= {};
-      cfg.areas_options[areaId]                                    ??= {};
-      cfg.areas_options[areaId].groups_options                     ??= {};
-      cfg.areas_options[areaId].groups_options[domain]             ??= {};
-      cfg.areas_options[areaId].groups_options[domain].hidden      ??= [];
+      cfg.areas_options                                        ??= {};
+      cfg.areas_options[areaId]                               ??= {};
+      cfg.areas_options[areaId].groups_options                ??= {};
+      cfg.areas_options[areaId].groups_options[domain]        ??= {};
+      cfg.areas_options[areaId].groups_options[domain].hidden ??= [];
       const list = cfg.areas_options[areaId].groups_options[domain].hidden;
       const idx  = list.indexOf(entityId);
       if (hidden  && idx === -1) list.push(entityId);
@@ -649,7 +601,6 @@
       this._fireConfigChanged();
     }
 
-    // Alle Entities einer Domain auf einmal ein-/ausblenden
     _toggleDomainAll(areaId, domain, allEntityIds, hide) {
       const cfg = JSON.parse(JSON.stringify(this._config));
       cfg.areas_options                                        ??= {};
@@ -668,11 +619,12 @@
       }));
     }
 
+    // ── DOM-Helpers ────────────────────────────────────────────
+
     _toggleArea(areaId) {
       if (this._openAreas.has(areaId)) this._openAreas.delete(areaId);
       else                             this._openAreas.add(areaId);
-      // Nur DOM-Updates, kein komplettes Re-Render
-      const shadow = this.shadowRoot;
+      const shadow  = this.shadowRoot;
       const content = shadow.querySelector(`.area-content[data-area="${areaId}"]`);
       const header  = shadow.querySelector(`.area-header[data-area="${areaId}"]`);
       const chevron = header?.querySelector('.chevron');
@@ -682,6 +634,19 @@
       chevron?.classList.toggle('open', isOpen);
     }
 
+    _switchTab(areaId, tab) {
+      this._activeTab.set(areaId, tab);
+      const shadow = this.shadowRoot;
+      shadow.querySelectorAll(`.tab-btn[data-area="${areaId}"]`).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      shadow.querySelectorAll(`.tab-pane[data-area="${areaId}"]`).forEach(pane => {
+        pane.classList.toggle('active', pane.dataset.tab === tab);
+      });
+    }
+
+    // ── Render ─────────────────────────────────────────────────
+
     _render() {
       const shadow = this.shadowRoot;
       const cfg    = this._config;
@@ -690,20 +655,24 @@
       const showSecurity = cfg.show_security       !== false;
       const showBattery  = cfg.show_battery_status !== false;
 
-      // ── Räume-HTML ────────────────────────────────────────
       let areasHtml = '';
+
       if (this._loading) {
         areasHtml = `<div class="loading"><div class="spinner"></div>Lade R\u00e4ume und Ger\u00e4te\u2026</div>`;
       } else if (this._registry) {
         const { areas = [], entities = [], devices = [] } = this._registry;
         const filtered = R.filterAreas(areas);
+
         if (!filtered.length) {
           areasHtml = '<div class="loading">Keine Bereiche gefunden.</div>';
         } else {
           areasHtml = filtered.map(area => {
-            const aId       = area.area_id;
-            const isOpen    = this._openAreas.has(aId);
-            // Alle verfügbaren Entities OHNE hidden-Filter (damit man togglen kann)
+            const aId    = area.area_id;
+            const isOpen = this._openAreas.has(aId);
+            const curTab = this._activeTab.get(aId) || 'devices';
+            const aOpts  = cfg.areas_options?.[aId] || {};
+
+            // Alle Entities ohne hidden-Filter
             const allByDomain = {};
             const rawEntities = R.filterAvailable(R.filterByLabels(
               R.filterByArea(entities, aId, R.buildDeviceAreaMap(devices))
@@ -712,24 +681,19 @@
               allByDomain[dom] = ents.map(e => e.entity_id);
             }
 
-            // Anzahl ausgeblendeter Entities → Badge
+            // Badge
             let hiddenCount = 0;
             for (const dom of DOMAIN_ORDER) {
-              if (!allByDomain[dom]) continue;
-              hiddenCount += R.getHiddenEntities(cfg, aId, dom).length;
+              if (allByDomain[dom]) hiddenCount += R.getHiddenEntities(cfg, aId, dom).length;
             }
 
-            // Domain-Blöcke
+            // ── TAB 1: Geräte ──────────────────────────────────
             const domainBlocks = DOMAIN_ORDER.map(dom => {
               if (!allByDomain[dom]?.length) return '';
-              const hiddenNow   = R.getHiddenEntities(cfg, aId, dom);
-              const allHidden   = hiddenNow.length === allByDomain[dom].length;
-              const allVisible  = hiddenNow.length === 0;
-              const btnLabel    = allHidden ? 'Alle einblenden' : 'Alle ausblenden';
-
+              const hiddenNow = R.getHiddenEntities(cfg, aId, dom);
+              const allHidden = hiddenNow.length === allByDomain[dom].length;
               const entityRows = allByDomain[dom].map(id => {
                 const isHidden = hiddenNow.includes(id);
-                // Friendly name aus Registry wenn vorhanden
                 const entObj   = entities.find(e => e.entity_id === id);
                 const fname    = entObj?.name || entObj?.original_name || '';
                 return `
@@ -738,39 +702,91 @@
                       ${fname ? `<div class="entity-name">${fname}</div>` : ''}
                       <div class="entity-id-small">${id}</div>
                     </div>
-                    <ha-switch
-                      data-area="${aId}"
-                      data-domain="${dom}"
-                      data-entity="${id}"
-                      ${!isHidden ? 'checked' : ''}
-                    ></ha-switch>
+                    <ha-switch data-area="${aId}" data-domain="${dom}" data-entity="${id}" ${!isHidden ? 'checked' : ''}></ha-switch>
                   </div>`;
               }).join('');
-
               return `
                 <div class="domain-block">
                   <div class="domain-header">
-                    <div class="domain-header-left">
-                      <ha-icon icon="${DOMAIN_ICONS[dom] || 'mdi:dots-horizontal'}"></ha-icon>
-                      ${DOMAIN_TITLES[dom] || dom}
-                    </div>
-                    <button class="domain-all-btn"
-                      data-area="${aId}"
-                      data-domain="${dom}"
-                      data-hide="${!allHidden}"
-                      data-entities="${allByDomain[dom].join(',')}"
-                    >${btnLabel}</button>
+                    <div class="domain-header-left"><ha-icon icon="${DOMAIN_ICONS[dom] || 'mdi:dots-horizontal'}"></ha-icon>${DOMAIN_TITLES[dom] || dom}</div>
+                    <button class="domain-all-btn" data-area="${aId}" data-domain="${dom}" data-hide="${!allHidden}" data-entities="${allByDomain[dom].join(',')}">${allHidden ? 'Alle einblenden' : 'Alle ausblenden'}</button>
                   </div>
                   ${entityRows}
                 </div>`;
             }).join('');
 
+            // ── TAB 2: Raumoptionen ────────────────────────────
+            // Sensor-Dropdowns: alle Sensor-Entities des Raums, nach device_class
+            const allSensors = rawEntities.filter(e => e?.entity_id?.startsWith('sensor.'));
+
+            const sensorDropdowns = PRIMARY_SENSOR_CLASSES.map(sc => {
+              // Kandidaten: Sensoren deren device_class zur Klasse passt (wenn hass vorhanden)
+              const candidates = allSensors.filter(e => {
+                // Fallback: entity_id enthält den Klassennamen
+                return e.entity_id.includes(sc.key) ||
+                       (this._hass?.states[e.entity_id]?.attributes?.device_class === sc.key);
+              });
+              if (!candidates.length) return ''; // Klasse nicht im Raum vorhanden → nicht anzeigen
+
+              const currentVal = aOpts.primary_sensors?.[sc.key] || '';
+              const options    = candidates.map(e => {
+                const fname = e.name || e.original_name || e.entity_id;
+                return `<option value="${e.entity_id}" ${currentVal === e.entity_id ? 'selected' : ''}>${fname} (${e.entity_id})</option>`;
+              }).join('');
+
+              return `
+                <div class="opt-row">
+                  <div class="opt-label"><ha-icon icon="${sc.icon}"></ha-icon>${sc.label}</div>
+                  <select class="opt-select" data-area="${aId}" data-sensor-class="${sc.key}">
+                    <option value="">– kein führender Sensor –</option>
+                    ${options}
+                  </select>
+                </div>`;
+            }).join('');
+
+            const hasAnySensor = PRIMARY_SENSOR_CLASSES.some(sc =>
+              allSensors.some(e => e.entity_id.includes(sc.key) ||
+                (this._hass?.states[e.entity_id]?.attributes?.device_class === sc.key))
+            );
+
+            const roomOptsHtml = `
+              <div class="room-opts">
+                <div class="opt-row">
+                  <div class="opt-label"><ha-icon icon="mdi:format-title"></ha-icon>Titel-Override</div>
+                  <input class="opt-input" type="text" placeholder="${area.name}" value="${aOpts.title_override || ''}" data-area="${aId}" data-opt-key="title_override">
+                  <div class="opt-hint">Leer lassen = Bereichsname aus HA</div>
+                </div>
+                <div class="opt-row">
+                  <div class="opt-label"><ha-icon icon="mdi:emoticon"></ha-icon>Icon-Override</div>
+                  <input class="opt-input" type="text" placeholder="${area.icon || 'mdi:home'}" value="${aOpts.icon_override || ''}" data-area="${aId}" data-opt-key="icon_override">
+                  <div class="opt-hint">z.B. mdi:sofa, mdi:bed, mdi:kitchen</div>
+                </div>
+                ${hasAnySensor ? `
+                  <div class="opt-row">
+                    <div class="opt-label" style="margin-bottom:10px"><ha-icon icon="mdi:star"></ha-icon>F\u00fchrende Sensoren</div>
+                    <div class="opt-hint" style="margin-bottom:8px">Diese Sensoren werden prominent im Raumtitel und als Chips angezeigt.</div>
+                    ${sensorDropdowns}
+                  </div>` : ''}
+                <div class="opt-row">
+                  <div class="opt-label"><ha-icon icon="mdi:lightbulb-outline"></ha-icon>Licht-Indikator</div>
+                  <select class="opt-select" data-area="${aId}" data-opt-key="light_indicator">
+                    <option value="">– automatisch (erstes Licht) –</option>
+                    ${(allByDomain['light'] || []).map(id => {
+                      const entObj = entities.find(e => e.entity_id === id);
+                      const fname  = entObj?.name || entObj?.original_name || id;
+                      return `<option value="${id}" ${(aOpts.light_indicator === id) ? 'selected' : ''}>${fname}</option>`;
+                    }).join('')}
+                  </select>
+                  <div class="opt-hint">Welches Licht f\u00e4rbt die Raum-Kachel amber/grau</div>
+                </div>
+              </div>`;
+
             return `
               <div class="area-card">
                 <div class="area-header${isOpen ? ' open' : ''}" data-area="${aId}">
                   <div class="area-header-left">
-                    <ha-icon icon="${area.icon || 'mdi:home'}"></ha-icon>
-                    ${area.name}
+                    <ha-icon icon="${aOpts.icon_override || area.icon || 'mdi:home'}"></ha-icon>
+                    ${aOpts.title_override || area.name}
                   </div>
                   <div class="area-header-right">
                     <span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span>
@@ -778,7 +794,16 @@
                   </div>
                 </div>
                 <div class="area-content${isOpen ? ' open' : ''}" data-area="${aId}">
-                  ${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Ger\u00e4te in diesem Raum.</div>'}
+                  <div class="tabs">
+                    <button class="tab-btn${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">\uD83D\uDCA1 Ger\u00e4te</button>
+                    <button class="tab-btn${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">\u2699\uFE0F Raumoptionen</button>
+                  </div>
+                  <div class="tab-pane${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">
+                    ${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Ger\u00e4te in diesem Raum.</div>'}
+                  </div>
+                  <div class="tab-pane${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">
+                    ${roomOptsHtml}
+                  </div>
                 </div>
               </div>`;
           }).join('');
@@ -788,67 +813,74 @@
       shadow.innerHTML = `
         <style>${EDITOR_STYLES}</style>
 
-        <div class="section-header">
-          <ha-icon icon="mdi:tune"></ha-icon>
-          Allgemein
-        </div>
-
+        <div class="section-header"><ha-icon icon="mdi:tune"></ha-icon>Allgemein</div>
         <div class="general-row">
-          <label>
-            Raum-\u00dcbersicht anzeigen
-            <span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span>
-          </label>
+          <label>Raum-\u00dcbersicht anzeigen<span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span></label>
           <ha-switch id="sw-areas" ${showAreas ? 'checked' : ''}></ha-switch>
         </div>
         <div class="general-row">
-          <label>
-            Sicherheits-Widget anzeigen
-            <span class="sub">Schl\u00f6sser, T\u00fcren, Fenster, Alarm</span>
-          </label>
+          <label>Sicherheits-Widget anzeigen<span class="sub">Schl\u00f6sser, T\u00fcren, Fenster, Alarm</span></label>
           <ha-switch id="sw-security" ${showSecurity ? 'checked' : ''}></ha-switch>
         </div>
         <div class="general-row">
-          <label>
-            Batterie-Warnungen anzeigen
-            <span class="sub">Ger\u00e4te mit niedrigem Akkustand</span>
-          </label>
+          <label>Batterie-Warnungen anzeigen<span class="sub">Ger\u00e4te mit niedrigem Akkustand</span></label>
           <ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch>
         </div>
 
-        <div class="section-header" style="margin-top:28px">
-          <ha-icon icon="mdi:home-city"></ha-icon>
-          Ger\u00e4te pro Raum
-        </div>
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>R\u00e4ume</div>
         <div id="areas-container">${areasHtml}</div>
 
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
       `;
 
-      // ── Events: Allgemein ──────────────────────────────────
+      // ── Events: Allgemein
       shadow.getElementById('sw-areas')   ?.addEventListener('change', e => this._setConfigValue('show_areas',          e.target.checked));
       shadow.getElementById('sw-security')?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
       shadow.getElementById('sw-battery') ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
 
-      // ── Events: Raum-Akkordeon ─────────────────────────────
-      shadow.querySelectorAll('.area-header').forEach(header => {
-        header.addEventListener('click', () => this._toggleArea(header.dataset.area));
+      // ── Events: Akkordeon
+      shadow.querySelectorAll('.area-header').forEach(h => h.addEventListener('click', () => this._toggleArea(h.dataset.area)));
+
+      // ── Events: Tabs
+      shadow.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._switchTab(btn.dataset.area, btn.dataset.tab);
+        });
       });
 
-      // ── Events: Alle-Toggle (Domain) ───────────────────────
+      // ── Events: Domain-Alle-Toggle
       shadow.querySelectorAll('.domain-all-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', e => {
           e.stopPropagation();
           const { area, domain, hide, entities: ents } = btn.dataset;
           this._toggleDomainAll(area, domain, ents.split(','), hide === 'true');
         });
       });
 
-      // ── Events: Entity-Toggles ─────────────────────────────
+      // ── Events: Entity-Switches
       shadow.querySelectorAll('ha-switch[data-entity]').forEach(sw => {
         sw.addEventListener('change', e => {
           const { area, domain, entity } = e.target.dataset;
           this._toggleEntityHidden(area, domain, entity, !e.target.checked);
         });
+      });
+
+      // ── Events: Raumoptionen — Text-Inputs (debounced)
+      shadow.querySelectorAll('.opt-input[data-opt-key]').forEach(inp => {
+        let t;
+        inp.addEventListener('input', e => {
+          clearTimeout(t);
+          t = setTimeout(() => this._setAreaOption(inp.dataset.area, inp.dataset.optKey, e.target.value.trim()), 400);
+        });
+      });
+
+      // ── Events: Raumoptionen — Selects (light_indicator & sensor-class)
+      shadow.querySelectorAll('.opt-select[data-opt-key]').forEach(sel => {
+        sel.addEventListener('change', e => this._setAreaOption(sel.dataset.area, sel.dataset.optKey, e.target.value));
+      });
+      shadow.querySelectorAll('.opt-select[data-sensor-class]').forEach(sel => {
+        sel.addEventListener('change', e => this._setPrimarySensor(sel.dataset.area, sel.dataset.sensorClass, e.target.value));
       });
     }
   }
