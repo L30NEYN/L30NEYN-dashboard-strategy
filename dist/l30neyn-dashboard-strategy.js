@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.7.0
+ * @version 1.8.0
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.8.0';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -552,60 +552,219 @@
         const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
         if (weatherEntity) cards.push(Cards.weather(weatherEntity));
 
-        if (config.show_areas !== false) {
-          const deviceAreaMap = R.buildDeviceAreaMap(devices);
-          // Ausgeblendete Räume herausfiltern
-          const filteredAreas = R.sortAreas(
-            R.filterAreas(areas).filter(a => !R.isAreaHidden(config, a.area_id)),
-            config.area_order
-          );
-          if (filteredAreas.length) {
-            const areaCards = [];
-            for (const area of filteredAreas) {
-              const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
-              const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
-              const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
-              const aOpts  = config?.areas_options?.[area.area_id] || {};
-              const lightIndicator = aOpts?.light_indicator || lights[0];
-              const enrichedConfig = {
-                ...config,
-                areas_options: { ...config?.areas_options, [area.area_id]: { ...aOpts, light_indicator: lightIndicator } },
-              };
-              const roomEntities = { light: lights, cover: covers };
-              const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
-
-              // Wenn Quick-Actions vorhanden: Karte + Chips in vertical-stack
-              if (btn._chipsRaw?.length) {
-                const templateCard = {
-                  type: 'custom:mushroom-template-card',
-                  primary: btn.primary,
-                  icon: btn.icon,
-                  icon_color: btn.icon_color,
-                  secondary: btn.secondary,
-                  tap_action: btn.tap_action,
-                  hold_action: btn.hold_action,
-                  fill_container: false,
-                };
-                const chipsCard = {
-                  type: 'custom:mushroom-chips-card',
-                  chips: btn._chipsRaw,
-                  alignment: 'end',
-                  card_mod: {
-                    style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
-                  },
-                };
-                areaCards.push({
-                  type: 'vertical-stack',
-                  cards: [templateCard, chipsCard],
-                });
-              } else {
-                const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
-                areaCards.push(cleanBtn);
-              }
-            }
-            cards.push({ type: 'grid', cards: areaCards, columns: 2, square: false });
-          }
+  // ═══ FEATURE 1: Uhr + Favoriten-Block ═══
+      if (config.show_clock_favorites !== false) {
+        const favEntities = config.favorite_entities || [];
+        const clockChips = [];
+  
+        clockChips.push({
+          type: 'template',
+          icon: 'mdi:clock-outline',
+          icon_color: 'blue',
+          content: `{{ now().strftime('%H:%M') }}`,
+          tap_action: { action: 'none' }
+        });
+  
+        clockChips.push({
+          type: 'template',
+          icon: 'mdi:calendar',
+          icon_color: 'grey',
+          content: `{{ now().strftime('%d.%m.%Y') }}`,
+          tap_action: { action: 'none' }
+        });
+  
+        favEntities.slice(0, 4).forEach(entityId => {
+          if (!hass.states[entityId]) return;
+          clockChips.push({
+            type: 'entity',
+            entity: entityId,
+            tap_action: { action: 'more-info' }
+          });
+        });
+  
+        if (clockChips.length > 0) {
+          cards.push({
+            type: 'custom:mushroom-chips-card',
+            chips: clockChips,
+            alignment: 'center'
+          });
         }
+      }
+        
+      if (config.show_areas !== false) {
+  const deviceAreaMap = R.buildDeviceAreaMap(devices);
+  const filteredAreas = R.sortAreas(
+    R.filterAreas(areas).filter(a => !R.isAreaHidden(config, a.area_id)),
+    config.area_order
+  );
+  
+  const floorConfig = config.floor_grouping || {};
+  const useFloorGrouping = floorConfig.enabled === true;
+  
+  if (!useFloorGrouping) {
+    // ═══ STANDARD: Flache Liste ═══
+    if (filteredAreas.length) {
+      const areaCards = [];
+      for (const area of filteredAreas) {
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+            },
+          };
+          areaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          areaCards.push(cleanBtn);
+        }
+      }
+      cards.push({ type: 'grid', cards: areaCards, columns: 2, square: false });
+    }
+  } else {
+    // ═══ FEATURE 3: Etagen-Gruppierung ═══
+    const floors = floorConfig.floors || [];
+    
+    floors.forEach(floor => {
+      const { name, icon, area_ids } = floor;
+      const floorAreas = filteredAreas.filter(a => area_ids.includes(a.area_id));
+      
+      if (floorAreas.length === 0) return;
+      
+      cards.push(Cards.title(name || 'Etage', '', icon || 'mdi:floor-plan'));
+      
+      const floorAreaCards = [];
+      for (const area of floorAreas) {
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+            },
+          };
+          floorAreaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          floorAreaCards.push(cleanBtn);
+        }
+      }
+      
+      cards.push({ type: 'grid', cards: floorAreaCards, columns: 2, square: false });
+    });
+    
+    // Nicht zugeordnete Räume
+    const assignedIds = new Set(floors.flatMap(f => f.area_ids || []));
+    const unassigned = filteredAreas.filter(a => !assignedIds.has(a.area_id));
+    
+    if (unassigned.length > 0) {
+      cards.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
+      const unassignedCards = [];
+      for (const area of unassigned) {
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+            },
+          };
+          unassignedCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          unassignedCards.push(cleanBtn);
+        }
+      }
+      cards.push({ type: 'grid', cards: unassignedCards, columns: 2, square: false });
+    }
+  }
+}
+
 
         if (config.show_security !== false) {
           const sec = Collectors.collectSecurity(hass, entities);
@@ -629,6 +788,45 @@
           }
         }
 
+// ═══ FEATURE 2: Domain-Übersichten (hausweite Gruppen) ═══
+      if (config.show_domain_overviews !== false) {
+        const domainGroups = config.domain_groups || [];
+  
+        domainGroups.forEach(group => {
+          const { title, icon, domains, entity_filter } = group;
+          const groupEntities = [];
+    
+          domains.forEach(domain => {
+            const matching = entities.filter(e => {
+              if (!e?.entity_id?.startsWith(`${domain}.`)) return false;
+              const state = hass.states[e.entity_id];
+              if (!state) return false;
+        
+        // Optional: Filter nach Pattern (z.B. "licht_" für zentrale Lichter)
+              if (entity_filter && !e.entity_id.includes(entity_filter)) return false;
+        
+              return true;
+            });
+            groupEntities.push(...matching.map(e => e.entity_id));
+          });
+    
+          if (groupEntities.length === 0) return;
+    
+          cards.push(Cards.title(title || 'Gruppe', `${groupEntities.length} Geräte`));
+    
+          const groupCards = groupEntities.slice(0, 20).map(id => {
+            const domain = id.split('.')[0];
+            if (domain === 'light') return Cards.light(id);
+            if (domain === 'cover') return Cards.cover(id);
+            if (domain === 'climate') return Cards.climate(id);
+            if (domain === 'switch') return Cards.entity(id);
+            return Cards.entity(id);
+          });
+    
+          cards.push({ type: 'grid', cards: groupCards, columns: 2, square: false });
+        });
+      }
+       
         if (!cards.length) cards.push({ type: 'markdown', content: 'Dashboard wird geladen...' });
         return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards };
       } catch (e) {
@@ -1342,9 +1540,26 @@
     }
 
     static getStubConfig() {
-      return { show_areas: true, show_security: true, show_battery_status: true, navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: [] };
-    }
-  }
+  return {
+    show_areas: true,
+    show_security: true,
+    show_battery_status: true,
+    show_clock_favorites: true,
+    show_domain_overviews: true,
+    favorite_entities: [],
+    domain_groups: [],
+    floor_grouping: {
+      enabled: false,
+      floors: []
+    },
+    navigation: {},
+    areas_options: {},
+    column_order: [],
+    area_order: [],
+    battery_entities: []
+  };
+}
+
 
   // ════════════════════════════════════════════════════════════════════════════════
   // REGISTER
