@@ -4,6 +4,29 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [1.8.0] - 2026-03-14
+
+### ✨ Neue Features
+
+#### 🕐 Uhr + Favoriten-Block (Overview)
+- **Uhrzeit-Chip** mit Live-Anzeige (HH:MM)
+- **Datums-Chip** (TT.MM.JJJJ)
+- **Favoriten-Entities** (max. 4) als Quick-Access Chips
+- Konfigurierbar über `show_clock_favorites` und `favorite_entities`
+
+**Beispiel-Konfiguration:**
+```yaml
+strategy:
+  type: custom:l30neyn-dashboard-strategy
+  show_clock_favorites: true
+  favorite_entities:
+    - light.wohnzimmer_haupt
+    - climate.wohnzimmer
+    - cover.wohnzimmer_rollo
+    - sensor.temperatur_aussen
+```
+
+
 ## [1.6.9] - 2026-03-13
 
 ### ✨ Added — Spalten- und Raumreihenfolge konfigurierbar
