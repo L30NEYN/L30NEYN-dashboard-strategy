@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.0
+ * @version 1.9.2
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.0';
+  const VERSION = '1.9.2';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -45,31 +45,47 @@
   };
 
   // ════════════════════════════════════════════════════════════════════════════════
-  // MODUL 3 — DASHBOARD PATH RESOLVER
+  // MODUL 3 — DASHBOARD CONTEXT RESOLVER
   // ════════════════════════════════════════════════════════════════════════════════
 
-  const resolveDashboardPath = async (hass, config) => {
-    const manual = config?.navigation?.dashboard_url_path;
-    if (manual) return '/' + String(manual).replace(/^\/+|\/+$/g, '');
-    try {
-      const dashboards = await callWS(hass, { type: 'lovelace/dashboards/list' });
-      if (Array.isArray(dashboards)) {
-        const currentPath = window.location.pathname;
-        const match = dashboards.find(d => {
-          if (!d?.url_path) return false;
-          const base = '/' + d.url_path;
-          return currentPath === base || currentPath.startsWith(base + '/');
-        });
-        if (match?.url_path) return '/' + match.url_path;
+  const DashboardContextResolver = {
+    async resolve(hass, config) {
+      const manual = config?.navigation?.dashboard_url_path;
+      if (manual) {
+        const clean = String(manual).replace(/^\/+|\/+$/g, '');
+        return { source: 'config', url_path: clean };
       }
-    } catch (e) {
-      console.warn('[L30NEYN] resolveDashboardPath failed:', e.message);
-    }
-    return '/lovelace';
+      try {
+        const dashboards = await callWS(hass, { type: 'lovelace/dashboards/list' });
+        if (Array.isArray(dashboards)) {
+          const currentPath = window.location.pathname;
+          const match = dashboards.find((d) => {
+            if (!d?.url_path) return false;
+            const base = '/' + d.url_path;
+            return currentPath === base || currentPath.startsWith(base + '/');
+          });
+          if (match?.url_path) return { source: 'ui-dashboard', url_path: match.url_path, title: match.title, mode: match.mode };
+        }
+      } catch (e) {
+        console.warn('[L30NEYN] DashboardContext: lovelace/dashboards/list failed:', e.message);
+      }
+      return { source: 'fallback', url_path: 'lovelace' };
+    },
   };
 
   // ════════════════════════════════════════════════════════════════════════════════
-    // MODUL 5 — NAVIGATION BUILDER
+  // MODUL 4 — DASHBOARD PATH RESOLVER
+  // ════════════════════════════════════════════════════════════════════════════════
+
+  const DashboardPathResolver = {
+    async resolve(hass, config) {
+      const ctx = await DashboardContextResolver.resolve(hass, config);
+      return '/' + ctx.url_path;
+    },
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════════
+  // MODUL 5 — NAVIGATION BUILDER
   // ════════════════════════════════════════════════════════════════════════════════
 
   const NavigationBuilder = {
@@ -156,7 +172,9 @@
   // ════════════════════════════════════════════════════════════════════════════════
 
   const Collectors = {
-
+    collectRoomEntities(areaId, hass, entities, devices, config) {
+      return R.getRoomEntities(areaId, entities, devices, config);
+    },
     collectSecurity(hass, entities) {
       const DOMAINS = new Set(['lock', 'binary_sensor', 'alarm_control_panel']);
       const sec = R.filterAvailable(R.filterByLabels(
@@ -348,17 +366,15 @@
         secondary = aOpts.subtitle;
       }
 
-      const iconColor = lightInd
-        ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'blue-grey' }}`
-        : (lights.length > 0
-          ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
-          : 'blue-grey');
-
       const mainCard = {
         type: 'custom:mushroom-template-card',
         primary: aOpts.title_override || area.name,
         icon: aOpts.icon_override || area.icon || 'mdi:home',
-        icon_color: iconColor,
+        icon_color: lightInd
+          ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'blue-grey' }}`
+          : (lights.length > 0
+            ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
+            : 'blue-grey'),
         secondary,
         tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
         hold_action: { action: 'none' },
@@ -375,9 +391,9 @@
           icon: `{{ 'mdi:lightbulb' if [${idList}] | select('is_state','on') | list | count > 0 else 'mdi:lightbulb-off' }}`,
           icon_color: `{{ 'amber' if [${idList}] | select('is_state','on') | list | count > 0 else 'grey' }}`,
           tap_action: {
-            action: 'call-service',
-            service: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
-            service_data: { entity_id: lights },
+            action: 'perform-action',
+            perform_action: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
+            target: { entity_id: lights },
           },
         });
       }
@@ -389,9 +405,9 @@
           icon: `{{ 'mdi:window-shutter-open' if [${idList}] | select('is_state','open') | list | count > 0 else 'mdi:window-shutter' }}`,
           icon_color: `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'grey' }}`,
           tap_action: {
-            action: 'call-service',
-            service: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
-            service_data: { entity_id: covers },
+            action: 'perform-action',
+            perform_action: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
+            target: { entity_id: covers },
           },
         });
       }
@@ -416,13 +432,21 @@
       };
 
       return {
-        ...mainCard,
-        badge_icon: lights.length > 0
-          ? `{{ 'mdi:lightbulb' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else '' }}`
-          : (covers.length > 0
-            ? `{{ 'mdi:window-shutter-open' if [${covers.map(id => `'${id}'`).join(',')}] | select('is_state','open') | list | count > 0 else '' }}`
-            : undefined),
-        badge_color: lights.length > 0 ? 'amber' : 'blue',
+        type: 'custom:mushroom-template-card',
+        primary: aOpts.title_override || area.name,
+        icon: aOpts.icon_override || area.icon || 'mdi:home',
+        icon_color: lightInd
+          ? `{{ 'amber' if is_state('${lightInd}', 'on') else 'blue-grey' }}`
+          : (lights.length > 0
+            ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
+            : 'blue-grey'),
+        secondary,
+        tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
+        hold_action: { action: 'none' },
+        fill_container: false,
+        badge_icon: chips.length > 0 ? undefined : undefined,
+        // Chips werden als separate Karte rechts platziert — daher wrapper:
+        _chips: chipsCard,
         _chipsRaw: chips,
         _lightsIds: lights,
         _coversIds: covers,
@@ -434,8 +458,18 @@
   // MODUL 9 — VIEW BUILDERS
   // ════════════════════════════════════════════════════════════════════════════════
 
+  const COLUMN_DEFS = [
+    { key: 'light',         domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
+    { key: 'cover',         domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
+    { key: 'climate',       domains: ['climate', 'fan'], title: 'Klima',       icon: 'mdi:thermometer'    },
+    { key: 'media_player',  domains: ['media_player'],   title: 'Medien',      icon: 'mdi:speaker'        },
+    { key: 'switch',        domains: ['switch'],         title: 'Schalter',    icon: 'mdi:toggle-switch'  },
+    { key: 'sensor',        domains: ['sensor'],         title: 'Sensoren',    icon: 'mdi:eye'            },
+    { key: 'binary_sensor', domains: ['binary_sensor'],  title: 'Status',      icon: 'mdi:bell-ring'      },
+    { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
+  ];
+
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
-  // Abgeleitet aus COLUMN_DEFS (fan als Sonderfall da unter 'climate' gruppiert)
   const DOMAIN_TITLES = Object.fromEntries([
     ...COLUMN_DEFS.flatMap(c => c.domains.map(d => [d, c.title])),
     ['fan', 'Ventilatoren'],
@@ -463,17 +497,6 @@
   ];
 
   // ── Spalten-Basis-Konfiguration ────────────────────────────────────────────────
-  const COLUMN_DEFS = [
-    { key: 'light',         domains: ['light'],          title: 'Beleuchtung', icon: 'mdi:lightbulb'      },
-    { key: 'cover',         domains: ['cover'],          title: 'Rollos',      icon: 'mdi:window-shutter' },
-    { key: 'climate',       domains: ['climate', 'fan'], title: 'Klima',       icon: 'mdi:thermometer'    },
-    { key: 'media_player',  domains: ['media_player'],   title: 'Medien',      icon: 'mdi:speaker'        },
-    { key: 'switch',        domains: ['switch'],         title: 'Schalter',    icon: 'mdi:toggle-switch'  },
-    { key: 'sensor',        domains: ['sensor'],         title: 'Sensoren',    icon: 'mdi:eye'            },
-    { key: 'binary_sensor', domains: ['binary_sensor'],  title: 'Status',      icon: 'mdi:bell-ring'      },
-    { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
-  ];
-
   const resolveColumnOrder = (config) => {
     const order = config?.column_order;
     if (!order?.length) return COLUMN_DEFS;
@@ -520,40 +543,7 @@
     return { type: 'vertical-stack', cards: colCards };
   };
 
-  // ── HELPER: Raumkarte bauen (shared by flat list, floors, unassigned) ──────────
-  const buildRoomCardEntry = (area, basePath, config, entities, deviceAreaMap) => {
-    const ae     = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
-    const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
-    const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
-    const aOpts  = config?.areas_options?.[area.area_id] || {};
-    const enrichedConfig = {
-      ...config,
-      areas_options: {
-        ...config?.areas_options,
-        [area.area_id]: { ...aOpts, light_indicator: aOpts?.light_indicator || lights[0] },
-      },
-    };
-    const btn = Cards.roomButton(area, basePath, enrichedConfig, { light: lights, cover: covers });
-    if (btn._chipsRaw?.length) {
-      const templateCard = {
-        type: 'custom:mushroom-template-card',
-        primary: btn.primary, icon: btn.icon, icon_color: btn.icon_color,
-        secondary: btn.secondary, tap_action: btn.tap_action,
-        hold_action: btn.hold_action, fill_container: false,
-      };
-      const chipsCard = {
-        type: 'custom:mushroom-chips-card',
-        chips: btn._chipsRaw,
-        alignment: 'end',
-        card_mod: { style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }` },
-      };
-      return { type: 'vertical-stack', cards: [templateCard, chipsCard] };
-    }
-    const { _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
-    return cleanBtn;
-  };
-
-    // ── OVERVIEW VIEW ──────────────────────────────────────────────────────────────
+  // ── OVERVIEW VIEW ──────────────────────────────────────────────────────────────
 
   const OverviewView = {
     generate(hass, config, registry, basePath) {
@@ -606,7 +596,47 @@
     if (filteredAreas.length) {
       const areaCards = [];
       for (const area of filteredAreas) {
-        areaCards.push(buildRoomCardEntry(area, basePath, config, entities, deviceAreaMap));
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
+            },
+          };
+          areaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          areaCards.push(cleanBtn);
+        }
       }
       cards.push({ type: 'grid', cards: areaCards, columns: 2, square: false });
     }
@@ -616,7 +646,7 @@
     
     floors.forEach(floor => {
       const { name, icon, area_ids } = floor;
-      const floorAreas = area_ids.map(id => filteredAreas.find(a => a.area_id === id)).filter(Boolean);
+      const floorAreas = filteredAreas.filter(a => area_ids.includes(a.area_id));
       
       if (floorAreas.length === 0) return;
       
@@ -624,7 +654,47 @@
       
       const floorAreaCards = [];
       for (const area of floorAreas) {
-        floorAreaCards.push(buildRoomCardEntry(area, basePath, config, entities, deviceAreaMap));
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
+            },
+          };
+          floorAreaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          floorAreaCards.push(cleanBtn);
+        }
       }
       
       cards.push({ type: 'grid', cards: floorAreaCards, columns: 2, square: false });
@@ -638,7 +708,47 @@
       cards.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
       const unassignedCards = [];
       for (const area of unassigned) {
-        unassignedCards.push(buildRoomCardEntry(area, basePath, config, entities, deviceAreaMap));
+        const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
+        const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
+        const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
+        const aOpts = config?.areas_options?.[area.area_id] || {};
+        const lightIndicator = aOpts?.light_indicator || lights[0];
+        
+        const enrichedConfig = {
+          ...config,
+          areas_options: {
+            ...config?.areas_options,
+            [area.area_id]: { ...aOpts, light_indicator: lightIndicator }
+          },
+        };
+        
+        const roomEntities = { light: lights, cover: covers };
+        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
+        
+        if (btn._chipsRaw?.length) {
+          const templateCard = {
+            type: 'custom:mushroom-template-card',
+            primary: btn.primary,
+            icon: btn.icon,
+            icon_color: btn.icon_color,
+            secondary: btn.secondary,
+            tap_action: btn.tap_action,
+            hold_action: btn.hold_action,
+            fill_container: false,
+          };
+          const chipsCard = {
+            type: 'custom:mushroom-chips-card',
+            chips: btn._chipsRaw,
+            alignment: 'end',
+            card_mod: {
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
+            },
+          };
+          unassignedCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
+        } else {
+          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
+          unassignedCards.push(cleanBtn);
+        }
       }
       cards.push({ type: 'grid', cards: unassignedCards, columns: 2, square: false });
     }
@@ -725,7 +835,7 @@
         if (!area) return { title: areaId, path: areaId, cards: [Cards.error('Raum nicht gefunden: ' + areaId)] };
 
         const aOpts        = config?.areas_options?.[areaId] || {};
-        const roomEntities = R.getRoomEntities(areaId, entities, devices, config);
+        const roomEntities = Collectors.collectRoomEntities(areaId, hass, entities, devices, config);
 
         const orderedCols   = resolveColumnOrder(config);
         const populatedCols = [];
@@ -1400,7 +1510,7 @@
         console.info(`[L30NEYN] Generating dashboard v${VERSION}`);
         const [registryData, basePath] = await Promise.all([
           loadRegistryData(hass),
-          resolveDashboardPath(hass, config),
+          DashboardPathResolver.resolve(hass, config),
         ]);
         if (registryData.source === 'error') {
           return { views: [{ title: 'Fehler', path: 'overview', icon: 'mdi:alert-circle', cards: [Cards.error('Registry-Daten konnten nicht geladen werden', registryData.error)] }] };
