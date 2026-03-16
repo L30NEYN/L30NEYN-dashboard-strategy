@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.3
+ * @version 1.9.4
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.3';
+  const VERSION = '1.9.4';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -301,7 +301,43 @@
         secondary = aOpts.subtitle;
       }
 
-      const mainCard = {
+      // badge_icon / badge_color: Licht-Status als primäres Badge
+      let badge_icon  = undefined;
+      let badge_color = undefined;
+      if (lights.length > 0) {
+        const idList = lights.map(id => `'${id}'`).join(',');
+        badge_icon  = `{{ 'mdi:lightbulb' if [${idList}] | select('is_state','on') | list | count > 0 else 'mdi:lightbulb-off' }}`;
+        badge_color = `{{ 'amber' if [${idList}] | select('is_state','on') | list | count > 0 else 'disabled' }}`;
+      } else if (covers.length > 0) {
+        const idList = covers.map(id => `'${id}'`).join(',');
+        badge_icon  = `{{ 'mdi:window-shutter-open' if [${idList}] | select('is_state','open') | list | count > 0 else 'mdi:window-shutter' }}`;
+        badge_color = `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'disabled' }}`;
+      }
+
+      // hold_action: Licht toggle; double_tap_action: Cover toggle
+      const holdAction = lights.length > 0
+        ? {
+            action: 'call-service',
+            service: `{{ 'light.turn_off' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
+            service_data: { entity_id: lights },
+          }
+        : covers.length > 0
+          ? {
+              action: 'call-service',
+              service: `{{ 'cover.close_cover' if [${covers.map(id => `'${id}'`).join(',')}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
+              service_data: { entity_id: covers },
+            }
+          : { action: 'none' };
+
+      const doubleTapAction = covers.length > 0 && lights.length > 0
+        ? {
+            action: 'call-service',
+            service: `{{ 'cover.close_cover' if [${covers.map(id => `'${id}'`).join(',')}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
+            service_data: { entity_id: covers },
+          }
+        : { action: 'none' };
+
+      const card = {
         type: 'custom:mushroom-template-card',
         primary: aOpts.title_override || area.name,
         icon: aOpts.icon_override || area.icon || 'mdi:home',
@@ -311,54 +347,16 @@
             ? `{{ 'amber' if [${lights.map(id => `'${id}'`).join(',')}] | select('is_state','on') | list | count > 0 else 'blue-grey' }}`
             : 'blue-grey'),
         secondary,
-        tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
-        hold_action: { action: 'none' },
-        fill_container: false,
+        tap_action:        { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
+        hold_action:       holdAction,
+        double_tap_action: doubleTapAction,
+        fill_container:    true,
       };
 
-      const chips = [];
+      if (badge_icon)  card.badge_icon  = badge_icon;
+      if (badge_color) card.badge_color = badge_color;
 
-      if (lights.length > 0) {
-        const idList = lights.map(id => `'${id}'`).join(',');
-        chips.push({
-          type: 'template',
-          icon: `{{ 'mdi:lightbulb' if [${idList}] | select('is_state','on') | list | count > 0 else 'mdi:lightbulb-off' }}`,
-          icon_color: `{{ 'amber' if [${idList}] | select('is_state','on') | list | count > 0 else 'grey' }}`,
-          tap_action: {
-            action: 'call-service',
-            service: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
-            service_data: { entity_id: lights },
-          },
-        });
-      }
-
-      if (covers.length > 0) {
-        const idList = covers.map(id => `'${id}'`).join(',');
-        chips.push({
-          type: 'template',
-          icon: `{{ 'mdi:window-shutter-open' if [${idList}] | select('is_state','open') | list | count > 0 else 'mdi:window-shutter' }}`,
-          icon_color: `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'grey' }}`,
-          tap_action: {
-            action: 'call-service',
-            service: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
-            service_data: { entity_id: covers },
-          },
-        });
-      }
-
-      if (!chips.length) return mainCard;
-
-      const chipsCard = {
-        type: 'custom:mushroom-chips-card',
-        chips,
-        alignment: 'end',
-        card_mod: { style: `\n            ha-card {\n              background: none !important;\n              box-shadow: none !important;\n              padding: 0 !important;\n              --chip-spacing: 4px;\n            }\n          ` },
-      };
-
-      return {
-        type: 'vertical-stack',
-        cards: [mainCard, chipsCard],
-      };
+      return card;
     },
   };
 
