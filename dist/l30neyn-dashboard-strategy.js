@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.9
+ * @version 2.0.0
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.9';
+  const VERSION = '2.0.0';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -429,10 +429,6 @@
     { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
   ];
 
-  // ────────────────────────────────────────────────────────────────────────────────
-  // OVERVIEW WIDGET DEFINITIONS
-  // Reihenfolge dieser drei Widgets ist per overview_widget_order konfigurierbar
-  // ────────────────────────────────────────────────────────────────────────────────
   const OVERVIEW_WIDGET_DEFS = [
     { key: 'weather',  title: 'Wetter',   icon: 'mdi:weather-cloudy'    },
     { key: 'clock',    title: 'Uhr',      icon: 'mdi:clock-outline'     },
@@ -522,7 +518,6 @@
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
         cards.push(Cards.title(greeting, 'Smart Home Übersicht'));
 
-        // ── Widgets in konfigurierter Reihenfolge rendern ──
         if (config.show_clock_favorites !== false) {
           const widgetOrder = resolveWidgetOrder(config);
           const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
@@ -574,8 +569,8 @@
             const floorGroups = R.buildFloorGroups(filteredAreas, haFloors, floorConfig.floors);
 
             if (floorGroups.length === 0) {
-              console.warn('[L30NEYN] Floor grouping enabled but no floors found in HA registry or config. Showing all areas.');
-              cards.push({ type: 'custom:mushroom-title-card', title: 'Alle Räume', subtitle: 'Keine Etagen konfiguriert – Räume in HA Etagen einteilen' });
+              console.warn('[L30NEYN] Floor grouping enabled but no floors found. Showing all areas.');
+              cards.push({ type: 'custom:mushroom-title-card', title: 'Alle Räume', subtitle: 'Keine Etagen konfiguriert' });
               cards.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
             } else {
               floorGroups.forEach(floor => {
@@ -688,7 +683,7 @@
         const urlPath = basePath.replace(/^\/+/, '');
         const cards   = [];
         cards.push(Cards.title('Einstellungen', 'L30NEYN Dashboard v' + VERSION));
-        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  overview_widget_order: [weather, clock, calendar]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Kalender deaktivieren:', '  # calendar_entity: false', '  # Kalender manuell festlegen:', '  # calendar_entity: calendar.mein_kalender', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
+        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  overview_widget_order: [weather, clock, calendar]', '  area_order: []', '  areas_options:', '    <area_id>:', '      hidden: true', '  battery_entities: []', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
         const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
         for (const area of sortedAreas) {
           const roomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
@@ -1037,7 +1032,7 @@
         ${batteryHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:floor-plan"></ha-icon>Etagen-Gruppierung</div>
         <div class="general-row"><label>Etagen aktivieren<span class="sub">Räume nach HA-Etagen gruppieren (Einstellungen → Bereiche &amp; Zonen → Etagen)</span></label><ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch></div>
-        <div class="opt-hint" style="margin-top:4px">Etagen werden automatisch aus der HA Floor Registry gelesen. Räume den Etagen in HA zuordnen, nicht hier.</div>
+        <div class="opt-hint" style="margin-top:4px">Etagen werden automatisch aus der HA Floor Registry gelesen.</div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
@@ -1136,16 +1131,22 @@
   // REGISTER
   // ════════════════════════════════════════════════════════════════════════════════
 
-  // Editor als Custom Element registrieren (korrekt, da HTMLElement-Subklasse)
+  // Editor als Custom Element registrieren (HTMLElement-Subklasse)
   try {
     customElements.define('l30neyn-dashboard-strategy-editor', L30NEYNDashboardStrategyEditor);
   } catch (e) {
     if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Editor registration failed:', e);
   }
 
-  // Strategy über HA's eigenen Mechanismus registrieren (KEIN customElements.define!)
-  window.customDashboardStrategies = window.customDashboardStrategies || {};
-  window.customDashboardStrategies['l30neyn-dashboard-strategy'] = L30NEYNDashboardStrategy;
+  // Dashboard Strategy mit korrektem ll-strategy-dashboard- Präfix registrieren
+  // Laut HA Developer Docs: https://developers.home-assistant.io/docs/frontend/custom-ui/custom-strategy/
+  // customElements.define("ll-strategy-dashboard-<name>", DashboardStrategyClass)
+  // Dashboard YAML: strategy: type: custom:<name>
+  try {
+    customElements.define('ll-strategy-dashboard-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
+  } catch (e) {
+    if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Strategy registration failed:', e);
+  }
 
   console.info(
     `%c L30NEYN-DASHBOARD %c v${VERSION} `,
