@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.7
+ * @version 1.9.8
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.7';
+  const VERSION = '1.9.8';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -67,7 +67,7 @@
     async resolve(hass, config) {
       const manual = config?.navigation?.dashboard_url_path;
       if (manual) {
-        const clean = String(manual).replace(/^\/+|\/+$/g, '');
+        const clean = String(manual).replace(/^\\/+|\\/+$/g, '');
         return { source: 'config', url_path: clean };
       }
       try {
@@ -273,7 +273,6 @@
       return { type: 'markdown', content: `# ⚠️ Dashboard Fehler\n\n**${error}**\n\n\`\`\`\n${details}\n\`\`\`` };
     },
 
-    // Uhr als vollwertige mushroom-title-card (title = Uhrzeit, subtitle = Datum)
     clock() {
       return {
         type: 'custom:mushroom-title-card',
@@ -282,7 +281,6 @@
       };
     },
 
-    // Kalender-Karte (native HA calendar card)
     calendar(entity) {
       return {
         type: 'calendar',
@@ -431,6 +429,26 @@
     { key: 'camera',        domains: ['camera'],         title: 'Kameras',     icon: 'mdi:camera'         },
   ];
 
+  // ────────────────────────────────────────────────────────────────────────────────
+  // OVERVIEW WIDGET DEFINITIONS
+  // Reihenfolge dieser drei Widgets ist per overview_widget_order konfigurierbar
+  // ────────────────────────────────────────────────────────────────────────────────
+  const OVERVIEW_WIDGET_DEFS = [
+    { key: 'weather',  title: 'Wetter',   icon: 'mdi:weather-cloudy'    },
+    { key: 'clock',    title: 'Uhr',      icon: 'mdi:clock-outline'     },
+    { key: 'calendar', title: 'Kalender', icon: 'mdi:calendar-month'    },
+  ];
+
+  const resolveWidgetOrder = (config) => {
+    const order = config?.overview_widget_order;
+    if (!order?.length) return OVERVIEW_WIDGET_DEFS;
+    const map = new Map(OVERVIEW_WIDGET_DEFS.map(w => [w.key, w]));
+    const sorted = [];
+    for (const key of order) { if (map.has(key)) sorted.push(map.get(key)); }
+    for (const w of OVERVIEW_WIDGET_DEFS) { if (!sorted.includes(w)) sorted.push(w); }
+    return sorted;
+  };
+
   const DOMAIN_ORDER  = ['light','cover','climate','fan','switch','media_player','sensor','binary_sensor','camera'];
   const DOMAIN_TITLES = Object.fromEntries([
     ...COLUMN_DEFS.flatMap(c => c.domains.map(d => [d, c.title])),
@@ -491,7 +509,6 @@
     return { type: 'vertical-stack', cards: colCards };
   };
 
-  // Hilfsfunktion: Erste calendar.* Entity aus hass.states finden
   const detectCalendarEntity = (hass) => {
     return Object.keys(hass.states || {}).find(id => id.startsWith('calendar.')) || null;
   };
@@ -504,22 +521,28 @@
         const hour = new Date().getHours();
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
         cards.push(Cards.title(greeting, 'Smart Home Übersicht'));
-        const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
-        if (weatherEntity) cards.push(Cards.weather(weatherEntity));
 
+        // ── Widgets in konfigurierter Reihenfolge rendern ──
         if (config.show_clock_favorites !== false) {
-          const favEntities = config.favorite_entities || [];
-          // Uhr als eigenständige mushroom-title-card
-          cards.push(Cards.clock());
+          const widgetOrder = resolveWidgetOrder(config);
+          const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
 
-          // Kalender-Karte: calendar_entity: false = deaktiviert, sonst autodetect oder explizite Entity
-          if (config.calendar_entity !== false) {
-            const calEntity = config.calendar_entity || detectCalendarEntity(hass);
-            if (calEntity && hass.states[calEntity]) {
-              cards.push(Cards.calendar(calEntity));
+          for (const widget of widgetOrder) {
+            if (widget.key === 'weather') {
+              if (weatherEntity) cards.push(Cards.weather(weatherEntity));
+            } else if (widget.key === 'clock') {
+              cards.push(Cards.clock());
+            } else if (widget.key === 'calendar') {
+              if (config.calendar_entity !== false) {
+                const calEntity = config.calendar_entity || detectCalendarEntity(hass);
+                if (calEntity && hass.states[calEntity]) {
+                  cards.push(Cards.calendar(calEntity));
+                }
+              }
             }
           }
 
+          const favEntities = config.favorite_entities || [];
           if (favEntities.length > 0) {
             const favChips = favEntities.slice(0, 6).filter(id => hass.states[id]).map(id => ({ type: 'entity', entity: id, tap_action: { action: 'more-info' } }));
             if (favChips.length) cards.push({ type: 'custom:mushroom-chips-card', chips: favChips, alignment: 'center' });
@@ -662,10 +685,10 @@
     generate(hass, config, registry, basePath) {
       try {
         const { entities = [], devices = [], areas = [] } = registry;
-        const urlPath = basePath.replace(/^\/+/, '');
+        const urlPath = basePath.replace(/^\\/+/, '');
         const cards   = [];
         cards.push(Cards.title('Einstellungen', 'L30NEYN Dashboard v' + VERSION));
-        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Kalender deaktivieren:', '  # calendar_entity: false', '  # Kalender manuell festlegen:', '  # calendar_entity: calendar.mein_kalender', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
+        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  overview_widget_order: [weather, clock, calendar]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Kalender deaktivieren:', '  # calendar_entity: false', '  # Kalender manuell festlegen:', '  # calendar_entity: calendar.mein_kalender', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
         const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
         for (const area of sortedAreas) {
           const roomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
@@ -852,6 +875,14 @@
       [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
       cfg.column_order = order; this._config = cfg; this._render(); this._fireConfigChanged();
     }
+    _moveWidget(idx, dir) {
+      const cfg = JSON.parse(JSON.stringify(this._config));
+      const order = cfg.overview_widget_order?.length ? [...cfg.overview_widget_order] : OVERVIEW_WIDGET_DEFS.map(w => w.key);
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= order.length) return;
+      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+      cfg.overview_widget_order = order; this._config = cfg; this._render(); this._fireConfigChanged();
+    }
     _moveArea(areaId, dir, allAreaIds) {
       const cfg = JSON.parse(JSON.stringify(this._config));
       let order = cfg.area_order?.length ? [...cfg.area_order] : [...allAreaIds];
@@ -903,6 +934,17 @@
       } else {
         calendarHtml = `<div class="opt-hint">Wird geladen…</div>`;
       }
+
+      // Widget-Reihenfolge (Wetter / Uhr / Kalender)
+      const currentWidgetOrder = cfg.overview_widget_order?.length ? cfg.overview_widget_order : OVERVIEW_WIDGET_DEFS.map(w => w.key);
+      const widgetSortHtml = `
+        <div class="sort-list" id="widget-sort-list">
+          ${currentWidgetOrder.map((key, idx) => {
+            const w = OVERVIEW_WIDGET_DEFS.find(d => d.key === key); if (!w) return '';
+            return `<div class="sort-row"><div class="sort-row-label"><ha-icon icon="${w.icon}"></ha-icon>${w.title}</div><button class="sort-btn" data-move-widget="${idx}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Nach oben">↑</button><button class="sort-btn" data-move-widget="${idx}" data-dir="1" ${idx === currentWidgetOrder.length - 1 ? 'disabled' : ''} title="Nach unten">↓</button></div>`;
+          }).join('')}
+        </div>
+        <div class="opt-hint">Reihenfolge von Wetter, Uhr und Kalender auf der Übersichtsseite.</div>`;
 
       const currentColOrder = cfg.column_order?.length ? cfg.column_order : COLUMN_DEFS.map(c => c.key);
       const colSortHtml = `
@@ -988,13 +1030,15 @@
         <div class="general-row"><label>Batterie-Warnungen anzeigen<span class="sub">Geräte mit niedrigem Akkustand</span></label><ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch></div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:calendar-clock"></ha-icon>Uhr &amp; Kalender</div>
         ${calendarHtml}
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:view-dashboard-outline"></ha-icon>Übersicht – Widget-Reihenfolge</div>
+        ${widgetSortHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:view-column"></ha-icon>Spaltenreihenfolge</div>
         ${colSortHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:battery-low"></ha-icon>Batterie-Monitoring</div>
         <div class="opt-hint" style="margin-bottom:6px">Manuell gepflegte Liste überschreibt die automatische Erkennung. Leer = alle Batterie-Sensoren werden erkannt.</div>
         ${batteryHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:floor-plan"></ha-icon>Etagen-Gruppierung</div>
-        <div class="general-row"><label>Etagen aktivieren<span class="sub">Räume nach HA-Etagen gruppieren (Einstellungen → Bereiche & Zonen → Etagen)</span></label><ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch></div>
+        <div class="general-row"><label>Etagen aktivieren<span class="sub">Räume nach HA-Etagen gruppieren (Einstellungen → Bereiche &amp; Zonen → Etagen)</span></label><ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch></div>
         <div class="opt-hint" style="margin-top:4px">Etagen werden automatisch aus der HA Floor Registry gelesen. Räume den Etagen in HA zuordnen, nicht hier.</div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
@@ -1009,7 +1053,6 @@
         cfg2.floor_grouping.enabled = e.target.checked;
         this._config = cfg2; this._render(); this._fireConfigChanged();
       });
-      // Kalender Toggle
       shadow.getElementById('sw-calendar')?.addEventListener('change', e => {
         if (!e.target.checked) {
           this._setConfigValue('calendar_entity', false);
@@ -1019,7 +1062,6 @@
           this._config = cfg2; this._render(); this._fireConfigChanged();
         }
       });
-      // Kalender Entity Select
       shadow.getElementById('cal-entity-select')?.addEventListener('change', e => {
         const val = e.target.value;
         if (val) this._setConfigValue('calendar_entity', val);
@@ -1031,6 +1073,8 @@
       });
       shadow.getElementById('battery-add-btn')?.addEventListener('click', () => { const sel = shadow.getElementById('battery-add-select'); if (sel?.value) this._addBatteryEntity(sel.value); });
       shadow.querySelectorAll('.battery-remove-btn[data-remove-battery]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._removeBatteryEntity(btn.dataset.removeBattery); }));
+      // Widget-Reihenfolge Buttons
+      shadow.querySelectorAll('.sort-btn[data-move-widget]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveWidget(parseInt(btn.dataset.moveWidget), parseInt(btn.dataset.dir)); }));
       shadow.querySelectorAll('.sort-btn[data-move-col]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveColumn(parseInt(btn.dataset.moveCol), parseInt(btn.dataset.dir)); }));
       shadow.querySelectorAll('.area-sort-btn[data-move-area]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveArea(btn.dataset.moveArea, parseInt(btn.dataset.dir), btn.dataset.allAreas.split(',')); }));
       shadow.querySelectorAll('.area-header').forEach(h => h.addEventListener('click', () => this._toggleArea(h.dataset.area)));
@@ -1085,7 +1129,8 @@
         show_clock_favorites: true, show_domain_overviews: true,
         favorite_entities: [], domain_groups: [],
         floor_grouping: { enabled: false },
-        navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: []
+        navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: [],
+        overview_widget_order: ['weather', 'clock', 'calendar'],
       };
     }
   }
