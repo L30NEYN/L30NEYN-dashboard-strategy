@@ -4,16 +4,29 @@
 [![GitHub Release](https://img.shields.io/github/release/L30NEYN/L30NEYN-dashboard-strategy.svg)](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases)
 [![License](https://img.shields.io/github/license/L30NEYN/L30NEYN-dashboard-strategy.svg)](LICENSE)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](CHANGELOG.md)
 
-Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mit automatischer Raumerkennung, Etagen-Gruppierung und intelligenten Quick-Actions.
+Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mit automatischer Raumerkennung, Etagen-Gruppierung, intelligenten Quick-Actions und **integrierten Raum-Steuerelemente**.
 
 ## ✨ Features
 
 ### 🏠 Dashboard-Verwaltung
-- **Übersichtsseite** mit Willkommens-Karte, Raum-Übersicht, Wetter, Uhr und Kalender
-- **Automatische Raum-Views** basierend auf Area Registry
+- **Übersichtsseite** mit fixierten Spalten-Layout (v2.2.0+ ✅)
+- **Automatische Raum-Views** mit Gruppensteuerungen (Lichter/Rollos)
 - **Einstellungs-Panel** zur grafischen Konfiguration
 - **Etagen-Gruppierung** mit nativer HA Floor Registry
+
+### 🎛️ Raum-Steuerelemente (NEW in v2.2.0)
+- **Lichter-Kontrolle**: "Alle an" / "Alle aus" Buttons pro Raum
+- **Rollos-Kontrolle**: "Alle öffnen" / "Alle schließen" Buttons pro Raum
+- **Intelligente Anzeige**: Nur bei 2+ Geräten pro Domain sichtbar
+- **Service-Calls**: Zentralisierte Gruppe-Steuerung mit Entity-Arrays
+
+### 📑 Spalten-Layout (NEW in v2.2.0)
+- **Fixe zweispaltiges Grid** für sichere Sortierung
+- **data-column="left|right"** für Block-Zuordnung
+- **data-order="N"** für numerische Sortierung je Spalte
+- **Responsive Fallback** (einspaltig auf Mobile)
 
 ### 📱 Quick-Actions
 - **Badge-Icon** auf Raumkarten zeigt Licht-/Rollo-Status
@@ -34,7 +47,35 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
 - **Primäre Sensoren** pro Raum definierbar
 - **Batterie-Monitoring** mit Autodetect oder expliziter Liste
 
-## 📦 Installation
+## 🔄 What's New in v2.2.0
+
+### 📊 Spalten-Layout Fix
+```
+Linke Spalte              Rechte Spalte
+┌──────────────┬──────────────┐
+│ Admin               │ Gästebed         │
+│ Automatisierungen  │ Küche            │
+│ Keller             │ Wohnzimmer       │
+│ Warnungen          │ HWR              │
+└──────────────┴──────────────┘
+```
+
+### 🎛️ Raum-Steuerelemente
+```
+Jeder Raum hat jetzt:
+
+💡 Lichter
+├─ 💡 Alle an
+└─ 💥 Alle aus
+
+👁 Rollos
+├─ ⬆️ Alle öffnen
+└─ ⬇️ Alle schließen
+```
+
+Siehe [CHANGELOG.md](CHANGELOG.md) für Details.
+
+## 💾 Installation
 
 ### Via HACS (Empfohlen)
 
@@ -59,7 +100,7 @@ wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/d
 
 Ressource registrieren unter **Einstellungen → Dashboards → Ressourcen**:
 ```
-URL: /local/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
+URL: /local/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js?v=2.2.0
 Typ: JavaScript-Modul
 ```
 
@@ -150,7 +191,51 @@ floor_grouping:
       area_ids: [schlafzimmer, bad, kinderzimmer]
 ```
 
-## 🏷️ Labels verwenden
+## 🍸 Spalten-Layout anpassen
+
+### Fixe Spalten definieren
+
+```yaml
+# In der Dashboard-YAML:
+strategy:
+  type: custom:l30neyn-dashboard-strategy
+  # ... andere Optionen ...
+
+views:
+  - !include overview.yaml    # Automatisch mit Spalten-Layout generiert
+```
+
+### Manual Adjustments
+
+Wenn du Blöcke manuell verschieben möchtest:
+
+```yaml
+# Card mit data-column und data-order:
+type: entities
+entities: [...]
+data-column: right     # "left" oder "right"
+data-order: 2          # Numerische Sortierung je Spalte
+```
+
+## 🍸 Raum-Steuerelemente konfigurieren
+
+Die Steuerelemente werden automatisch generiert, wenn 2+ Geräte einer Domain im Raum vorhanden sind.
+
+**Optionen** (in `areas_options`):
+
+```yaml
+areas_options:
+  wohnzimmer:
+    groups_options:
+      light:
+        hidden: []
+        show_all_controls: true  # Erzwinge Anzeige auch mit <2 Lichtern
+      cover:
+        hidden: []
+        show_all_controls: false
+```
+
+## 🍸 Labels verwenden
 
 Füge das Label `no_dboard` zu Entitäten oder Bereichen hinzu, um sie aus dem Dashboard auszublenden:
 
@@ -171,27 +256,33 @@ Füge das Label `no_dboard` zu Entitäten oder Bereichen hinzu, um sie aus dem D
 ### Karten werden nicht angezeigt
 - Installiere **Mushroom Cards** via HACS und führe Hard-Refresh durch
 
+### Steuerelemente im Raum erscheinen nicht
+1. Stelle sicher, dass 2+ Geräte der gleichen Domain im Raum vorhanden sind
+2. Prüfe `developer_tools/states` ob die Entities erreichbar sind
+3. Versuche `show_all_controls: true` in der Konfiguration
+
 ## 📝 Changelog
 
 Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 
+### Version 2.2.0 (2026-03-16) 🚀 CURRENT
+
+**Kernfeatures:**
+- 📊 **Spalten-Layout Fix** — Fixe zweispaltiges Grid mit data-column/data-order
+- 🎛️ **Raum-Steuerelemente** — Integrierte Lichter/Rollos Gruppensteuerung
+- 📋 **Dokumentation** — Vollständige Release Notes mit Architektur-Details
+- 🎉 **v2.2.0 Bundle** — Versionsaktualisierung in allen Dateien
+
+Siehe [CHANGELOG.md v2.2.0](CHANGELOG.md#220---2026-03-16-) für Details.
+
 ### Version 2.1.0 (2026-03-16)
 
 **Neue Features:**
-- 🗓️ **Kalender-Integration** — Native HA Kalender-Karte auf der Übersichtsseite (Autodetect oder manuell)
-- 🏢 **Native HA Floor Registry** — Etagen werden automatisch aus HA erkannt und nach Level sortiert
-- ⚡ **Badge Quick-Actions** — Licht-/Rollo-Status direkt auf der Raumkarte, Hold/Double-Tap-Actions
-- 🔀 **Widget-Reihenfolge** — `overview_widget_order` für Wetter, Uhr und Kalender
+- 🗓️ **Kalender-Integration** — Native HA Kalender-Karte auf der Übersichtsseite
+- 🏢 **Native HA Floor Registry** — Etagen werden automatisch erkannt
+- ⚡ **Badge Quick-Actions** — Hold/Double-Tap Actions auf Raumkarten
 
-### Version 2.0.0 (2026-03-16)
-
-**Neue Features:**
-- 🏢 Floor Registry Integration (manuell konfigurierbar)
-- 🔄 Async Übersichtsseite
-- 🗓️ Kalender-Karte (Basis)
-- ⚡ Vereinfachte roomButton()-Logik
-
-## 📤 Lizenz
+## 📦 Lizenz
 
 MIT License — Copyright (c) 2026 L30NEYN
 
@@ -204,15 +295,19 @@ MIT License — Copyright (c) 2026 L30NEYN
 - [Home Assistant](https://www.home-assistant.io/)
 - [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) by [@piitaya](https://github.com/piitaya)
 - [HACS](https://hacs.xyz/)
+- **Simon42** — Strategy Pattern Reference
 
 ## 🔗 Links
 
+- **NPM**: [l30neyn-dashboard-strategy](https://www.npmjs.com/package/l30neyn-dashboard-strategy)
 - **HACS-Setup**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
 - **Installation**: [INSTALLATION.md](INSTALLATION.md)
 - **Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
+- **API Docs**: [docs/API.md](docs/API.md)
 - **Issues**: [GitHub Issues](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
 - **Releases**: [GitHub Releases](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases)
 
 ---
 
-**Made with ❤️ by L30NEYN**
+**Made with ❤️ by L30NEYN**  
+**Current Version**: 2.2.0 | **Last Updated**: 2026-03-16
