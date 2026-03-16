@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 2.1.0
+ * @version 2.2.0
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.2.0';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -509,29 +509,43 @@
     return Object.keys(hass.states || {}).find(id => id.startsWith('calendar.')) || null;
   };
 
+  // ────────────────────────────────────────────────────────────────────────────────
+  // OVERVIEW: 3-Spalten-Layout
+  //
+  // Struktur:
+  //   Spalte Links  (col 0): Widgets (Wetter, Uhr, Kalender) + Favoriten
+  //   Spalte Mitte  (col 1): Raumübersicht (Kachel-Grid)
+  //   Spalte Rechts (col 2): Sicherheit + Batteriewarnungen + Domain-Gruppen
+  //
+  // Alle drei Spalten werden via horizontal-stack nebeneinander gerendert.
+  // ────────────────────────────────────────────────────────────────────────────────
+
   const OverviewView = {
     async generate(hass, config, registry, basePath) {
       try {
         const { entities = [], devices = [], areas = [] } = registry;
-        const cards = [];
+
         const hour = new Date().getHours();
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
-        cards.push(Cards.title(greeting, 'Smart Home Übersicht'));
+
+        // ── Spalte Links: Widgets ──────────────────────────────────────────────
+        const leftCol = [];
+        leftCol.push(Cards.title(greeting, 'Smart Home Übersicht'));
 
         if (config.show_clock_favorites !== false) {
-          const widgetOrder = resolveWidgetOrder(config);
+          const widgetOrder   = resolveWidgetOrder(config);
           const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
 
           for (const widget of widgetOrder) {
             if (widget.key === 'weather') {
-              if (weatherEntity) cards.push(Cards.weather(weatherEntity));
+              if (weatherEntity) leftCol.push(Cards.weather(weatherEntity));
             } else if (widget.key === 'clock') {
-              cards.push(Cards.clock());
+              leftCol.push(Cards.clock());
             } else if (widget.key === 'calendar') {
               if (config.calendar_entity !== false) {
                 const calEntity = config.calendar_entity || detectCalendarEntity(hass);
                 if (calEntity && hass.states[calEntity]) {
-                  cards.push(Cards.calendar(calEntity));
+                  leftCol.push(Cards.calendar(calEntity));
                 }
               }
             }
@@ -540,21 +554,25 @@
           const favEntities = config.favorite_entities || [];
           if (favEntities.length > 0) {
             const favChips = favEntities.slice(0, 6).filter(id => hass.states[id]).map(id => ({ type: 'entity', entity: id, tap_action: { action: 'more-info' } }));
-            if (favChips.length) cards.push({ type: 'custom:mushroom-chips-card', chips: favChips, alignment: 'center' });
+            if (favChips.length) leftCol.push({ type: 'custom:mushroom-chips-card', chips: favChips, alignment: 'center' });
           }
         }
+
+        // ── Spalte Mitte: Raumübersicht ───────────────────────────────────────
+        const centerCol = [];
+        centerCol.push(Cards.title('Räume', ''));
 
         if (config.show_areas !== false) {
           const deviceAreaMap = R.buildDeviceAreaMap(devices);
           const filteredAreas = R.sortAreas(R.filterAreas(areas).filter(a => !R.isAreaHidden(config, a.area_id)), config.area_order);
-          const floorConfig = config.floor_grouping || {};
+          const floorConfig   = config.floor_grouping || {};
           const useFloorGrouping = floorConfig.enabled === true;
 
           const buildRoomCardEntry = (area) => {
             const ae = R.filterAvailable(R.filterByLabels(R.filterByArea(entities, area.area_id, deviceAreaMap)));
             const lights = ae.filter(e => e?.entity_id?.startsWith('light.')).map(e => e.entity_id);
             const covers = ae.filter(e => e?.entity_id?.startsWith('cover.')).map(e => e.entity_id);
-            const aOpts = config?.areas_options?.[area.area_id] || {};
+            const aOpts  = config?.areas_options?.[area.area_id] || {};
             const lightIndicator = aOpts?.light_indicator || lights[0];
             const enrichedConfig = { ...config, areas_options: { ...config?.areas_options, [area.area_id]: { ...aOpts, light_indicator: lightIndicator } } };
             return Cards.roomButton(area, basePath, enrichedConfig, { light: lights, cover: covers });
@@ -562,52 +580,55 @@
 
           if (!useFloorGrouping) {
             if (filteredAreas.length) {
-              cards.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
+              centerCol.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
             }
           } else {
-            const haFloors = await loadFloors(hass);
+            const haFloors   = await loadFloors(hass);
             const floorGroups = R.buildFloorGroups(filteredAreas, haFloors, floorConfig.floors);
 
             if (floorGroups.length === 0) {
               console.warn('[L30NEYN] Floor grouping enabled but no floors found. Showing all areas.');
-              cards.push({ type: 'custom:mushroom-title-card', title: 'Alle Räume', subtitle: 'Keine Etagen konfiguriert' });
-              cards.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
+              centerCol.push({ type: 'custom:mushroom-title-card', title: 'Alle Räume', subtitle: 'Keine Etagen konfiguriert' });
+              centerCol.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
             } else {
               floorGroups.forEach(floor => {
                 const floorAreas = filteredAreas.filter(a => floor.area_ids.includes(a.area_id));
                 if (!floorAreas.length) return;
-                cards.push(Cards.title(floor.name, '', floor.icon));
-                cards.push({ type: 'grid', cards: floorAreas.map(buildRoomCardEntry), columns: 2, square: false });
+                centerCol.push(Cards.title(floor.name, '', floor.icon));
+                centerCol.push({ type: 'grid', cards: floorAreas.map(buildRoomCardEntry), columns: 2, square: false });
               });
               const assignedIds = new Set(floorGroups.flatMap(f => f.area_ids));
-              const unassigned = filteredAreas.filter(a => !assignedIds.has(a.area_id));
+              const unassigned  = filteredAreas.filter(a => !assignedIds.has(a.area_id));
               if (unassigned.length > 0) {
-                cards.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
-                cards.push({ type: 'grid', cards: unassigned.map(buildRoomCardEntry), columns: 2, square: false });
+                centerCol.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
+                centerCol.push({ type: 'grid', cards: unassigned.map(buildRoomCardEntry), columns: 2, square: false });
               }
             }
           }
         }
 
+        // ── Spalte Rechts: Sicherheit + Batterie + Domain-Gruppen ─────────────
+        const rightCol = [];
+
         if (config.show_security !== false) {
           const sec = Collectors.collectSecurity(hass, entities);
           if (sec.locks.length || sec.doors.length || sec.windows.length || sec.alarm) {
-            cards.push(Cards.title('Sicherheit'));
+            rightCol.push(Cards.title('Sicherheit'));
             const secCards = [];
             if (sec.alarm)          secCards.push(Cards.entity(sec.alarm));
             sec.locks  .forEach(id => secCards.push(Cards.entity(id)));
             sec.doors  .forEach(id => secCards.push(Cards.entity(id)));
             sec.windows.forEach(id => secCards.push(Cards.entity(id)));
-            cards.push({ type: 'grid', cards: secCards, columns: 2, square: false });
+            rightCol.push({ type: 'grid', cards: secCards, columns: 2, square: false });
           }
         }
 
         if (config.show_battery_status !== false) {
           const bats = Collectors.collectBatteries(hass, entities, config);
           if (bats.critical.length || bats.low.length) {
-            cards.push(Cards.title('Batterie-Warnung'));
-            bats.critical.forEach(id => cards.push(Cards.entity(id, { icon_color: 'red' })));
-            bats.low     .forEach(id => cards.push(Cards.entity(id, { icon_color: 'orange' })));
+            rightCol.push(Cards.title('Batterie-Warnung'));
+            bats.critical.forEach(id => rightCol.push(Cards.entity(id, { icon_color: 'red' })));
+            bats.low     .forEach(id => rightCol.push(Cards.entity(id, { icon_color: 'orange' })));
           }
         }
 
@@ -624,8 +645,8 @@
               }).forEach(e => groupEntities.push(e.entity_id));
             });
             if (!groupEntities.length) return;
-            cards.push(Cards.title(title || 'Gruppe', `${groupEntities.length} Geräte`));
-            cards.push({ type: 'grid', cards: groupEntities.slice(0, 20).map(id => {
+            rightCol.push(Cards.title(title || 'Gruppe', `${groupEntities.length} Geräte`));
+            rightCol.push({ type: 'grid', cards: groupEntities.slice(0, 20).map(id => {
               const d = id.split('.')[0];
               if (d === 'light') return Cards.light(id);
               if (d === 'cover') return Cards.cover(id);
@@ -635,8 +656,27 @@
           });
         }
 
-        if (!cards.length) cards.push({ type: 'markdown', content: 'Dashboard wird geladen...' });
-        return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards };
+        // Fallback: rechte Spalte bekommt Platzhalter wenn leer
+        if (rightCol.length === 0) {
+          rightCol.push({ type: 'markdown', content: '' });
+        }
+
+        // ── 3-Spalten horizontal-stack ─────────────────────────────────────────
+        const threeColLayout = {
+          type: 'horizontal-stack',
+          cards: [
+            { type: 'vertical-stack', cards: leftCol   },
+            { type: 'vertical-stack', cards: centerCol },
+            { type: 'vertical-stack', cards: rightCol  },
+          ],
+        };
+
+        return {
+          title: 'Übersicht',
+          path: 'overview',
+          icon: 'mdi:home',
+          cards: [threeColLayout],
+        };
       } catch (e) {
         return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
       }
@@ -1131,17 +1171,12 @@
   // REGISTER
   // ════════════════════════════════════════════════════════════════════════════════
 
-  // Editor als Custom Element registrieren (HTMLElement-Subklasse)
   try {
     customElements.define('l30neyn-dashboard-strategy-editor', L30NEYNDashboardStrategyEditor);
   } catch (e) {
     if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Editor registration failed:', e);
   }
 
-  // Dashboard Strategy mit korrektem ll-strategy-dashboard- Präfix registrieren
-  // Laut HA Developer Docs: https://developers.home-assistant.io/docs/frontend/custom-ui/custom-strategy/
-  // customElements.define("ll-strategy-dashboard-<name>", DashboardStrategyClass)
-  // Dashboard YAML: strategy: type: custom:<name>
   try {
     customElements.define('ll-strategy-dashboard-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
   } catch (e) {
