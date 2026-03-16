@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
-  "release_date": "2026-03-14",
+  "version": "1.9.0",
+  "release_date": "2026-03-16",
   "changelog_url": "https://github.com/L30NEYN/L30NEYN-dashboard-strategy/blob/main/CHANGELOG.md",
   "minimum_ha_version": "2024.1.0"
 }
