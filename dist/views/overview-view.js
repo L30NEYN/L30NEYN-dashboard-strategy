@@ -1,19 +1,19 @@
 /**
  * L30NEYN Dashboard Strategy - Overview View v2.2.0
  * 
- * Generates the main overview/home view with fixed 3-column layout:
- * - Column 1: Clock, Weather, Calendar
- * - Column 2: Rooms/Areas
- * - Column 3: Indicators (Battery, Security, etc.)
+ * Generates the main overview/home view with FIXED column layout:
+ * - Column LEFT: Admin, Keller, Warnungen
+ * - Column RIGHT: Gästezimmer, Küche, Wohnzimmer, Oben
  * 
- * Uses native Lovelace columns card for reliable layout management.
+ * Uses data-column (left/right) and data-order attributes for
+ * reliable layout management and automatic sorting.
  * 
  * @version 2.2.0
  */
 
-window.HaCustomOverviewView = {
+window.L30NEYNOverviewView = {
   /**
-   * Generate overview view with 3-column layout
+   * Generate overview view with fixed 2-column layout
    * @param {Object} hass - Home Assistant object
    * @param {Object} config - Strategy config
    * @param {Object} registry - Entity/device/area registry
@@ -21,237 +21,252 @@ window.HaCustomOverviewView = {
    */
   generate(hass, config, registry) {
     const { entities, devices, areas } = registry;
-    const collectors = window.HaCustomDataCollectors;
-    const builders = window.HaCustomCardBuilders;
+    const collectors = window.L30NEYNDataCollectors;
+    const builders = window.L30NEYNCardBuilders;
 
-    // Build three separate column card lists
-    const column1Cards = [];  // Clock, Weather, Calendar
-    const column2Cards = [];  // Rooms/Areas
-    const column3Cards = [];  // Indicators
+    // Define column structure (LEFT / RIGHT)
+    const COLUMN_LAYOUT = {
+      left: [],   // Admin, Warnungen, Keller, etc
+      right: [], // Gästezimmer, Küche, Wohnzimmer, HWR, Oben
+    };
 
-    // ========== COLUMN 1: Clock, Weather, Calendar ==========
-    
-    // Welcome/Greeting card
-    if (config.show_welcome !== false) {
-      column1Cards.push({
-        type: 'markdown',
-        content: `# ${this.getGreeting()}\n**${this.getDateString()}**`,
-      });
-    }
+    // ========== WELCOME / GREETING ==========
+    const welcomeCard = {
+      type: 'markdown',
+      content: `# ${this.getGreeting()}\n**${this.getDateString()}**`,
+    };
+    COLUMN_LAYOUT.left.push({
+      card: welcomeCard,
+      order: 0,
+    });
 
-    // Weather card
+    // ========== WEATHER ==========
     const weatherEntity = config.weather_entity || this.findWeatherEntity(hass);
     if (weatherEntity) {
-      column1Cards.push(builders.buildWeatherCard(weatherEntity));
-    }
-
-    // Calendar card (if configured)
-    if (config.calendar_entity) {
-      column1Cards.push({
-        type: 'calendar',
-        entity: config.calendar_entity,
+      const weatherCard = builders.buildWeatherCard(weatherEntity);
+      COLUMN_LAYOUT.left.push({
+        card: weatherCard,
+        order: 1,
       });
     }
 
-    // ========== COLUMN 2: Rooms/Areas ==========
-    
-    if (config.show_areas !== false) {
-      const areaCards = this.buildAreaCards(areas, hass, entities, devices, config);
-      if (areaCards.length > 0) {
-        // Group area cards by floor if configured
-        const floorGroupedAreas = this.groupAreasByFloor(areaCards, areas, config);
-        
-        if (Array.isArray(floorGroupedAreas)) {
-          // Multiple floors - show with headers
-          for (const floorGroup of floorGroupedAreas) {
-            if (floorGroup.title) {
-              column2Cards.push({
-                type: 'markdown',
-                content: `## ${floorGroup.title}`,
-              });
-            }
-            column2Cards.push({
-              type: 'grid',
-              cards: floorGroup.cards,
-              columns: Math.min(3, floorGroup.cards.length),
-            });
-          }
-        } else {
-          // Single floor or no grouping
-          column2Cards.push({
-            type: 'grid',
-            cards: areaCards,
-            columns: Math.min(3, areaCards.length),
-          });
-        }
-      }
+    // ========== CALENDAR ==========
+    if (config.calendar_entity) {
+      const calendarCard = {
+        type: 'calendar',
+        entity: config.calendar_entity,
+      };
+      COLUMN_LAYOUT.left.push({
+        card: calendarCard,
+        order: 2,
+      });
     }
 
-    // ========== COLUMN 3: Indicators ==========
+    // ========== ADMIN SECTION ==========
+    COLUMN_LAYOUT.left.push({
+      card: {
+        type: 'markdown',
+        content: '## ⚙️ Admin',
+      },
+      order: 10,
+    });
 
-    // Security indicator
-    if (config.show_security !== false) {
-      const securityData = collectors.collectSecurity(hass, entities, config);
-      if (
-        securityData.locks.length > 0 ||
-        securityData.doors.length > 0 ||
-        securityData.windows.length > 0 ||
-        securityData.alarm
-      ) {
-        column3Cards.push(builders.buildSecurityCard(securityData));
-      }
+    COLUMN_LAYOUT.left.push({
+      card: {
+        type: 'entities',
+        title: 'Admin',
+        entities: ['switch.automations_enabled', 'switch.maintenance_mode'],
+      },
+      order: 11,
+    });
+
+    COLUMN_LAYOUT.left.push({
+      card: {
+        type: 'entities',
+        title: 'Automatisierungen',
+        entities: ['automation.morning_routine', 'automation.evening_routine'],
+      },
+      order: 12,
+    });
+
+    // ========== ROOMS / AREAS ==========
+    let areaOrder = 20;
+    const areasByType = this.groupAreasByLocation(areas, config);
+
+    // Keller
+    for (const area of areasByType.basement || []) {
+      const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+      COLUMN_LAYOUT.left.push({
+        card: areaCard,
+        order: areaOrder++,
+      });
     }
 
-    // Battery status indicator
-    if (config.show_battery_status !== false) {
-      const batteries = collectors.collectBatteries(hass, entities, config);
-      if (batteries.critical.length > 0 || batteries.low.length > 0) {
-        column3Cards.push(builders.buildBatteryCard(batteries.critical, batteries.low));
-      }
+    // Erdgeschoss
+    for (const area of areasByType.ground || []) {
+      const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+      COLUMN_LAYOUT.left.push({
+        card: areaCard,
+        order: areaOrder++,
+      });
     }
 
-    // Light summary
-    if (config.show_light_summary !== false) {
-      const lights = collectors.collectLights(hass, entities, config);
-      if (lights.on.length > 0 || lights.off.length > 0) {
-        column3Cards.push({
-          type: 'entities',
-          title: 'Beleuchtung',
-          entities: [
-            {
-              type: 'custom:state-stat',
-              entity: 'light.all_lights',
-              name: 'Lichter an',
-              icon: 'mdi:lightbulb-on',
-            },
-          ],
+    // Gästebad (RIGHT)
+    if (areasByType.guestroom || []) {
+      let guestOrder = 0;
+      for (const area of areasByType.guestroom) {
+        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+        COLUMN_LAYOUT.right.push({
+          card: areaCard,
+          order: guestOrder++,
         });
       }
     }
 
-    // ========== Combine into 3-column layout ==========
-    
-    const layoutCard = {
-      type: 'grid',
-      cards: [
-        {
-          type: 'grid',
-          cards: column1Cards.length > 0 ? column1Cards : [{
-            type: 'markdown',
-            content: 'Keine Informationen verfügbar',
-          }],
-          columns: 1,
-        },
-        {
-          type: 'grid',
-          cards: column2Cards.length > 0 ? column2Cards : [{
-            type: 'markdown',
-            content: 'Keine Räume konfiguriert',
-          }],
-          columns: 1,
-        },
-        {
-          type: 'grid',
-          cards: column3Cards.length > 0 ? column3Cards : [{
-            type: 'markdown',
-            content: 'Alle Indikatoren in Ordnung ✓',
-          }],
-          columns: 1,
-        },
-      ],
-      columns: 3,
-    };
+    // Küche (RIGHT)
+    if (areasByType.kitchen || []) {
+      let kitchenOrder = 10;
+      for (const area of areasByType.kitchen) {
+        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+        COLUMN_LAYOUT.right.push({
+          card: areaCard,
+          order: kitchenOrder++,
+        });
+      }
+    }
 
+    // Wohnzimmer (RIGHT)
+    if (areasByType.livingroom || []) {
+      let livingOrder = 20;
+      for (const area of areasByType.livingroom) {
+        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+        COLUMN_LAYOUT.right.push({
+          card: areaCard,
+          order: livingOrder++,
+        });
+      }
+    }
+
+    // Oben (RIGHT)
+    if (areasByType.upper || []) {
+      let upperOrder = 30;
+      for (const area of areasByType.upper) {
+        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
+        COLUMN_LAYOUT.right.push({
+          card: areaCard,
+          order: upperOrder++,
+        });
+      }
+    }
+
+    // ========== WARNINGS / BATTERY ==========
+    const batteries = collectors.collectBatteries(hass, entities, config);
+    if (batteries.critical.length > 0 || batteries.low.length > 0) {
+      const batteryCard = builders.buildBatteryCard(batteries.critical, batteries.low);
+      COLUMN_LAYOUT.left.push({
+        card: batteryCard,
+        order: 100,
+      });
+    }
+
+    // ========== COMPILE CARDS WITH data-column AND data-order ==========
+    const leftCards = COLUMN_LAYOUT.left
+      .sort((a, b) => a.order - b.order)
+      .map((item, index) => ({
+        ...item.card,
+        'data-column': 'left',
+        'data-order': item.order,
+      }));
+
+    const rightCards = COLUMN_LAYOUT.right
+      .sort((a, b) => a.order - b.order)
+      .map((item, index) => ({
+        ...item.card,
+        'data-column': 'right',
+        'data-order': item.order,
+      }));
+
+    // ========== RETURN VIEW WITH GRID LAYOUT ==========
     return {
       title: config.title || 'Übersicht',
       path: 'overview',
       icon: config.icon || 'mdi:home',
-      cards: [layoutCard],
+      cards: [
+        {
+          type: 'grid',
+          cards: [...leftCards, ...rightCards],
+          columns: 2,
+        },
+      ],
     };
   },
 
   /**
-   * Build area summary cards
+   * Group areas by location type
    * @param {Array} areas - Area registry
+   * @param {Object} config - Strategy config
+   * @returns {Object} Grouped areas by type
+   */
+  groupAreasByLocation(areas, config) {
+    const grouped = {
+      basement: [],
+      ground: [],
+      guestroom: [],
+      kitchen: [],
+      livingroom: [],
+      upper: [],
+      other: [],
+    };
+
+    for (const area of areas) {
+      // Skip areas with no_dboard label
+      if (area.labels && area.labels.includes('no_dboard')) {
+        continue;
+      }
+
+      const id = area.area_id.toLowerCase();
+      const name = area.name.toLowerCase();
+
+      if (id.includes('keller') || name.includes('keller')) {
+        grouped.basement.push(area);
+      } else if (id.includes('gast') || name.includes('gast')) {
+        grouped.guestroom.push(area);
+      } else if (id.includes('kuche') || id.includes('küche') || name.includes('küche')) {
+        grouped.kitchen.push(area);
+      } else if (id.includes('wohnzimmer') || name.includes('wohnzimmer')) {
+        grouped.livingroom.push(area);
+      } else if (id.includes('oben') || id.includes('upper') || name.includes('oben')) {
+        grouped.upper.push(area);
+      } else if (id.includes('erdgeschoss') || id.includes('ground')) {
+        grouped.ground.push(area);
+      } else {
+        grouped.other.push(area);
+      }
+    }
+
+    return grouped;
+  },
+
+  /**
+   * Build individual area card
+   * @param {Object} area - Area object
    * @param {Object} hass - Home Assistant object
    * @param {Array} entities - Entity registry
    * @param {Array} devices - Device registry
    * @param {Object} config - Strategy config
-   * @returns {Array} Area button cards
+   * @returns {Object} Area card config
    */
-  buildAreaCards(areas, hass, entities, devices, config) {
-    const helpers = window.HaCustomHelpers;
-    const deviceAreaMap = helpers.buildDeviceAreaMap(devices);
-
-    return areas
-      .filter(area => {
-        // Hide areas with no_dboard label
-        return !area.labels || !area.labels.includes('no_dboard');
-      })
-      .map(area => {
-        // Get entities in this area
-        let areaEntities = helpers.filterByArea(entities, area.area_id, deviceAreaMap);
-        areaEntities = helpers.filterByLabels(areaEntities);
-        areaEntities = helpers.filterAvailable(areaEntities);
-
-        // Count entities
-        const lights = areaEntities.filter(e => e.entity_id.startsWith('light.'));
-        const covers = areaEntities.filter(e => e.entity_id.startsWith('cover.'));
-        const switches = areaEntities.filter(e => e.entity_id.startsWith('switch.'));
-        const climate = areaEntities.filter(e => e.entity_id.startsWith('climate.'));
-
-        return {
-          type: 'button',
-          name: area.name,
-          icon: area.icon || 'mdi:home',
-          tap_action: {
-            action: 'navigate',
-            navigation_path: `/dashboard-l30neyn/${area.area_id}`,
-          },
-          entity: lights.length > 0 ? lights[0].entity_id : undefined,
-          show_state: false,
-        };
-      });
-  },
-
-  /**
-   * Group area cards by floor
-   * @param {Array} areaCards - Area button cards
-   * @param {Array} areas - Area registry
-   * @param {Object} config - Strategy config
-   * @returns {Array|Array} Grouped areas or flat array
-   */
-  groupAreasByFloor(areaCards, areas, config) {
-    if (config.group_by_floor !== true) {
-      return areaCards; // Return flat array if not grouping
-    }
-
-    // Group by floor
-    const floorsMap = {};
-    const areaMap = {};
-
-    // Build area lookup
-    for (const area of areas) {
-      areaMap[area.area_id] = area;
-    }
-
-    // Group cards
-    for (const card of areaCards) {
-      const areaId = card.tap_action.navigation_path.split('/').pop();
-      const area = areaMap[areaId];
-      const floor = area?.floor_id || 'Sonstige';
-
-      if (!floorsMap[floor]) {
-        floorsMap[floor] = [];
-      }
-      floorsMap[floor].push(card);
-    }
-
-    // Convert to array with titles
-    return Object.entries(floorsMap).map(([floorId, cards]) => ({
-      title: floorId === 'Sonstige' ? 'Weitere Bereiche' : floorId,
-      cards: cards,
-    }));
+  buildAreaCard(area, hass, entities, devices, config) {
+    return {
+      type: 'button',
+      name: area.name,
+      icon: area.icon || 'mdi:home',
+      tap_action: {
+        action: 'navigate',
+        navigation_path: area.area_id,
+      },
+      show_state: false,
+    };
   },
 
   /**
@@ -290,4 +305,4 @@ window.HaCustomOverviewView = {
   },
 };
 
-console.info('[L30NEYN Overview View] Module loaded - v2.2.0');
+console.info('[L30NEYN Overview View] Module loaded - v2.2.0 ✓ Column Layout: data-column + data-order');
