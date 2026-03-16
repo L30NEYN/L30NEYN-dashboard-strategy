@@ -4,6 +4,26 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [1.9.0] - 2026-03-16
+
+### 🐛 Fixed
+
+- **Licht/Cover Quick-Action** in Raumkarten-Chips: `perform-action` + `perform_action` ersetzt durch `call-service` + `service_data` — Aktionen wurden zuvor nicht ausgeführt
+- **Badge in Raumkarten** (`badge_icon`): war immer `undefined` — zeigt jetzt korrekt Glühbirnen-Icon wenn Licht an bzw. Rollo-Icon wenn Rollo offen
+- **Etagen-Raumreihenfolge**: Räume innerhalb einer Etage folgen jetzt der konfigurierten `area_ids`-Reihenfolge statt der globalen `area_order`
+
+### ♻️ Refactoring (keine Verhaltensänderung)
+
+- `DashboardContextResolver` + `DashboardPathResolver` zu einer einzigen Funktion `resolveDashboardPath()` zusammengeführt
+- `Collectors.collectRoomEntities()` als reiner Wrapper entfernt — direkte Nutzung von `R.getRoomEntities()`
+- Neue Helper-Funktion `buildRoomCardEntry()` extrahiert — ersetzt 3× identische ~40-Zeilen-Blöcke (flat list, Etagen, nicht zugeordnete Räume)
+- `roomButton()` refactored: `iconColor` als Variable, zweite `mainCard`-Definition durch `{ ...mainCard, ... }` Spread ersetzt
+- `DOMAIN_TITLES` / `DOMAIN_ICONS` werden jetzt dynamisch aus `COLUMN_DEFS` abgeleitet statt hardcoded
+
+**Gesamt:** −4.776 Zeichen (−6 %) bei identischer Funktionalität
+
+---
+
 ## [1.8.0] - 2026-03-14
 
 ### ✨ Neue Features
@@ -101,6 +121,7 @@ strategy:
 - **Issues**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues
 - **Releases**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases
 
+[1.9.0]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.8.0...v1.9.0
 [1.6.9]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.7...v1.6.8
 [1.6.7]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.6...v1.6.7
