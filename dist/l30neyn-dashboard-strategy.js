@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.2
+ * @version 1.9.3
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.2';
+  const VERSION = '1.9.3';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -431,7 +431,7 @@
         },
       };
 
-      return {
+      const mainCard = {
         type: 'custom:mushroom-template-card',
         primary: aOpts.title_override || area.name,
         icon: aOpts.icon_override || area.icon || 'mdi:home',
@@ -444,12 +444,13 @@
         tap_action: { action: 'navigate', navigation_path: NavigationBuilder.room(basePath, area.area_id) },
         hold_action: { action: 'none' },
         fill_container: false,
-        badge_icon: chips.length > 0 ? undefined : undefined,
-        // Chips werden als separate Karte rechts platziert — daher wrapper:
-        _chips: chipsCard,
-        _chipsRaw: chips,
-        _lightsIds: lights,
-        _coversIds: covers,
+      };
+
+      if (!chips.length) return mainCard;
+
+      return {
+        type: 'vertical-stack',
+        cards: [mainCard, chipsCard],
       };
     },
   };
@@ -611,32 +612,7 @@
         };
         
         const roomEntities = { light: lights, cover: covers };
-        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
-        
-        if (btn._chipsRaw?.length) {
-          const templateCard = {
-            type: 'custom:mushroom-template-card',
-            primary: btn.primary,
-            icon: btn.icon,
-            icon_color: btn.icon_color,
-            secondary: btn.secondary,
-            tap_action: btn.tap_action,
-            hold_action: btn.hold_action,
-            fill_container: false,
-          };
-          const chipsCard = {
-            type: 'custom:mushroom-chips-card',
-            chips: btn._chipsRaw,
-            alignment: 'end',
-            card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
-            },
-          };
-          areaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
-        } else {
-          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
-          areaCards.push(cleanBtn);
-        }
+        areaCards.push(Cards.roomButton(area, basePath, enrichedConfig, roomEntities));
       }
       cards.push({ type: 'grid', cards: areaCards, columns: 2, square: false });
     }
@@ -669,32 +645,7 @@
         };
         
         const roomEntities = { light: lights, cover: covers };
-        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
-        
-        if (btn._chipsRaw?.length) {
-          const templateCard = {
-            type: 'custom:mushroom-template-card',
-            primary: btn.primary,
-            icon: btn.icon,
-            icon_color: btn.icon_color,
-            secondary: btn.secondary,
-            tap_action: btn.tap_action,
-            hold_action: btn.hold_action,
-            fill_container: false,
-          };
-          const chipsCard = {
-            type: 'custom:mushroom-chips-card',
-            chips: btn._chipsRaw,
-            alignment: 'end',
-            card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
-            },
-          };
-          floorAreaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
-        } else {
-          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
-          floorAreaCards.push(cleanBtn);
-        }
+        floorAreaCards.push(Cards.roomButton(area, basePath, enrichedConfig, roomEntities));
       }
       
       cards.push({ type: 'grid', cards: floorAreaCards, columns: 2, square: false });
@@ -723,32 +674,7 @@
         };
         
         const roomEntities = { light: lights, cover: covers };
-        const btn = Cards.roomButton(area, basePath, enrichedConfig, roomEntities);
-        
-        if (btn._chipsRaw?.length) {
-          const templateCard = {
-            type: 'custom:mushroom-template-card',
-            primary: btn.primary,
-            icon: btn.icon,
-            icon_color: btn.icon_color,
-            secondary: btn.secondary,
-            tap_action: btn.tap_action,
-            hold_action: btn.hold_action,
-            fill_container: false,
-          };
-          const chipsCard = {
-            type: 'custom:mushroom-chips-card',
-            chips: btn._chipsRaw,
-            alignment: 'end',
-            card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
-            },
-          };
-          unassignedCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
-        } else {
-          const { _chips, _chipsRaw, _lightsIds, _coversIds, ...cleanBtn } = btn;
-          unassignedCards.push(cleanBtn);
-        }
+        unassignedCards.push(Cards.roomButton(area, basePath, enrichedConfig, roomEntities));
       }
       cards.push({ type: 'grid', cards: unassignedCards, columns: 2, square: false });
     }
@@ -1434,7 +1360,7 @@
 
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:floor-plan"></ha-icon>Etagen-Gruppierung</div>
         <div class="general-row">
-          abel>Etagen aktivieren<span class="sub">Räume nach Etagen auf der Übersichtsseite gruppieren</span></label>
+          <label>Etagen aktivieren<span class="sub">Räume nach Etagen auf der Übersichtsseite gruppieren</span></label>
           <ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch>
         </div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
