@@ -4,6 +4,44 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
+## [2.1.0] - 2026-03-16
+
+### ✨ Neue Features
+
+#### 🗓️ Kalender-Integration (Overview)
+- **Native HA Kalender-Karte** wird automatisch auf der Übersichtsseite angezeigt
+- Erste gefundene `calendar.*`-Entity wird automatisch erkannt (Autodetect)
+- Konfigurierbar über `calendar_entity` (explizit) oder `calendar_entity: false` (deaktivieren)
+- Neue Option `overview_widget_order` zum Anordnen von Wetter, Uhr und Kalender
+
+#### 🏢 Native HA Floor Registry
+- **Automatische Etagen-Erkennung** aus der HA Floor Registry (`config/floor_registry/list`)
+- Etagen werden nach `level` sortiert (EG → OG → DG)
+- Fallback auf manuelle `floor_grouping.floors`-Konfiguration wenn keine HA-Etagen vorhanden
+- Rückwärtskompatibel: Bestandskonfigurationen funktionieren weiterhin
+
+#### ⚡ Raum-Quick-Actions (Badge)
+- `roomButton()` gibt jetzt direkt eine fertige Mushroom-Template-Card zurück
+- **Badge-Icon** zeigt Licht/Rollo-Status auf der Raumkarte
+- **Hold-Action**: Licht toggle (alle an/aus) bzw. Rollo toggle
+- **Double-Tap-Action**: Rollo toggle (wenn gleichzeitig Lichter vorhanden)
+- Kein `_chipsRaw`/`_chips`-Workaround mehr nötig
+
+### ♻️ Refactoring
+
+- `OverviewView.generate()` ist jetzt `async` (wegen Floor Registry Fetch)
+- `buildRoomCardEntry()` als lokale Helper-Funktion in OverviewView ausgelagert
+- `DOMAIN_TITLES` / `DOMAIN_ICONS` dynamisch aus `COLUMN_DEFS` abgeleitet
+- `COLUMN_DEFS` vor `DOMAIN_TITLES`/`DOMAIN_ICONS` deklariert (Fix: `ReferenceError`)
+
+### 🐛 Fixed
+
+- **Kritisch:** Registrierungsname korrigiert: `ll-strategy-l30neyn-dashboard-strategy` → `ll-strategy-dashboard-l30neyn-dashboard-strategy`
+- **Licht/Cover Quick-Action**: `perform-action` ersetzt durch `call-service` + `service_data`
+- **Etagen-Raumreihenfolge**: Räume folgen jetzt der konfigurierten `area_ids`-Reihenfolge
+
+---
+
 ## [1.9.3] - 2026-03-16
 
 ### 🐛 Fixed
@@ -44,7 +82,6 @@ strategy:
     - cover.wohnzimmer_rollo
     - sensor.temperatur_aussen
 ```
-
 
 ## [1.6.9] - 2026-03-13
 
@@ -120,6 +157,7 @@ strategy:
 - **Issues**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues
 - **Releases**: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases
 
+[2.1.0]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v2.0.0...v2.1.0
 [1.9.3]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.8.0...v1.9.3
 [1.6.9]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/L30NEYN/L30NEYN-dashboard-strategy/compare/v1.6.7...v1.6.8
