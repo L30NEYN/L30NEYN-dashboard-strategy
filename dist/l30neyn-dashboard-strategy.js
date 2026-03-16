@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.8.0
+ * @version 1.8.2
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.8.2';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -391,9 +391,9 @@
           icon: `{{ 'mdi:lightbulb' if [${idList}] | select('is_state','on') | list | count > 0 else 'mdi:lightbulb-off' }}`,
           icon_color: `{{ 'amber' if [${idList}] | select('is_state','on') | list | count > 0 else 'grey' }}`,
           tap_action: {
-            action: 'call-service',
-            service: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
-            service_data: { entity_id: lights },
+            action: 'perform-action',
+            perform_action: `{{ 'light.turn_off' if [${idList}] | select('is_state','on') | list | count > 0 else 'light.turn_on' }}`,
+            target: { entity_id: lights },
           },
         });
       }
@@ -405,9 +405,9 @@
           icon: `{{ 'mdi:window-shutter-open' if [${idList}] | select('is_state','open') | list | count > 0 else 'mdi:window-shutter' }}`,
           icon_color: `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'grey' }}`,
           tap_action: {
-            action: 'call-service',
-            service: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
-            service_data: { entity_id: covers },
+            action: 'perform-action',
+            perform_action: `{{ 'cover.close_cover' if [${idList}] | select('is_state','open') | list | count > 0 else 'cover.open_cover' }}`,
+            target: { entity_id: covers },
           },
         });
       }
@@ -552,44 +552,28 @@
         const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
         if (weatherEntity) cards.push(Cards.weather(weatherEntity));
 
-  // ═══ FEATURE 1: Uhr + Favoriten-Block ═══
+        // ═══ FEATURE 1: Uhr + Favoriten-Block ═══
       if (config.show_clock_favorites !== false) {
         const favEntities = config.favorite_entities || [];
-        const clockChips = [];
-  
-        clockChips.push({
-          type: 'template',
+        cards.push({
+          type: 'custom:mushroom-template-card',
+          primary: `{{ now().strftime('%H:%M') }}`,
+          secondary: `{{ now().strftime('%A, %d. %B %Y') }}`,
           icon: 'mdi:clock-outline',
           icon_color: 'blue',
-          content: `{{ now().strftime('%H:%M') }}`,
-          tap_action: { action: 'none' }
+          tap_action: { action: 'none' },
+          hold_action: { action: 'none' },
         });
-  
-        clockChips.push({
-          type: 'template',
-          icon: 'mdi:calendar',
-          icon_color: 'grey',
-          content: `{{ now().strftime('%d.%m.%Y') }}`,
-          tap_action: { action: 'none' }
-        });
-  
-        favEntities.slice(0, 4).forEach(entityId => {
-          if (!hass.states[entityId]) return;
-          clockChips.push({
-            type: 'entity',
-            entity: entityId,
-            tap_action: { action: 'more-info' }
-          });
-        });
-  
-        if (clockChips.length > 0) {
-          cards.push({
-            type: 'custom:mushroom-chips-card',
-            chips: clockChips,
-            alignment: 'center'
-          });
+        if (favEntities.length > 0) {
+          const favChips = favEntities.slice(0, 6)
+            .filter(id => hass.states[id])
+            .map(id => ({ type: 'entity', entity: id, tap_action: { action: 'more-info' } }));
+          if (favChips.length) {
+            cards.push({ type: 'custom:mushroom-chips-card', chips: favChips, alignment: 'center' });
+          }
         }
       }
+
         
       if (config.show_areas !== false) {
   const deviceAreaMap = R.buildDeviceAreaMap(devices);
@@ -639,7 +623,7 @@
             chips: btn._chipsRaw,
             alignment: 'end',
             card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
             },
           };
           areaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
@@ -697,7 +681,7 @@
             chips: btn._chipsRaw,
             alignment: 'end',
             card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
             },
           };
           floorAreaCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
@@ -751,7 +735,7 @@
             chips: btn._chipsRaw,
             alignment: 'end',
             card_mod: {
-              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 2px !important; --chip-spacing: 4px; }`,
+              style: `ha-card { background: none !important; box-shadow: none !important; padding: 0 12px 8px !important; --chip-spacing: 4px; margin-top: -4px; }`,
             },
           };
           unassignedCards.push({ type: 'vertical-stack', cards: [templateCard, chipsCard] });
@@ -1442,6 +1426,11 @@
         <div class="opt-hint" style="margin-bottom:6px">Manuell gepflegte Liste überschreibt die automatische Erkennung. Leer = alle Batterie-Sensoren werden erkannt.</div>
         ${batteryHtml}
 
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:floor-plan"></ha-icon>Etagen-Gruppierung</div>
+        <div class="general-row">
+          abel>Etagen aktivieren<span class="sub">Räume nach Etagen auf der Übersichtsseite gruppieren</span></label>
+          <ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch>
+        </div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
@@ -1450,6 +1439,15 @@
       shadow.getElementById('sw-areas')   ?.addEventListener('change', e => this._setConfigValue('show_areas',          e.target.checked));
       shadow.getElementById('sw-security')?.addEventListener('change', e => this._setConfigValue('show_security',       e.target.checked));
       shadow.getElementById('sw-battery') ?.addEventListener('change', e => this._setConfigValue('show_battery_status', e.target.checked));
+      shadow.getElementById('sw-floor-grouping')?.addEventListener('change', e => {
+        const cfg2 = JSON.parse(JSON.stringify(this._config));
+        cfg2.floor_grouping = cfg2.floor_grouping || {};
+        cfg2.floor_grouping.enabled = e.target.checked;
+        this._config = cfg2;
+        this._render();
+        this._fireConfigChanged();
+      });
+
 
       // Batterie Hinzufügen
       shadow.getElementById('battery-add-btn')?.addEventListener('click', () => {
