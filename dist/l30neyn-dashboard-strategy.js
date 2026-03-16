@@ -1540,26 +1540,26 @@
     }
 
     static getStubConfig() {
-  return {
-    show_areas: true,
-    show_security: true,
-    show_battery_status: true,
-    show_clock_favorites: true,
-    show_domain_overviews: true,
-    favorite_entities: [],
-    domain_groups: [],
-    floor_grouping: {
-      enabled: false,
-      floors: []
-    },
-    navigation: {},
-    areas_options: {},
-    column_order: [],
-    area_order: [],
-    battery_entities: []
-  };
-}
-
+      return {
+        show_areas: true,
+        show_security: true,
+        show_battery_status: true,
+        show_clock_favorites: true,
+        show_domain_overviews: true,
+        favorite_entities: [],
+        domain_groups: [],
+        floor_grouping: {
+          enabled: false,
+          floors: []
+        },
+        navigation: {},
+        areas_options: {},
+        column_order: [],
+        area_order: [],
+        battery_entities: []
+      };
+    }
+  } // ← fix: closing brace of L30NEYNDashboardStrategy class
 
   // ════════════════════════════════════════════════════════════════════════════════
   // REGISTER
