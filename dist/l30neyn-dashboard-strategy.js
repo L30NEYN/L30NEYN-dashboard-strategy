@@ -661,15 +661,62 @@
           rightCol.push({ type: 'markdown', content: '' });
         }
 
-        // ── 3-Spalten horizontal-stack ─────────────────────────────────────────
-        const threeColLayout = {
-          type: 'horizontal-stack',
-          cards: [
-            { type: 'vertical-stack', cards: leftCol   },
-            { type: 'vertical-stack', cards: centerCol },
-            { type: 'vertical-stack', cards: rightCol  },
-          ],
-        };
+// ── 3-Spalten horizontal-stack ─────────────────────────────────────────
+const threeColLayout = {
+  type: 'horizontal-stack',
+  cards: [
+    { type: 'vertical-stack', cards: leftCol   },
+    { type: 'vertical-stack', cards: centerCol },
+    { type: 'vertical-stack', cards: rightCol  },
+  ],
+  card_mod: {
+    style: `
+      :host {
+        display: block;
+      }
+      ha-card {
+        --stack-card-gap: 12px;
+      }
+      ha-card > div {
+        display: flex;
+        gap: var(--stack-card-gap);
+      }
+      ha-card > div > *:nth-child(1) {
+        flex: 1 1 20%;
+        min-width: 180px;
+      }
+      ha-card > div > *:nth-child(2) {
+        flex: 2 1 60%;
+        min-width: 260px;
+      }
+      ha-card > div > *:nth-child(3) {
+        flex: 1 1 20%;
+        min-width: 180px;
+      }
+      @media (max-width: 1024px) {
+        ha-card > div {
+          flex-wrap: wrap;
+        }
+        ha-card > div > * {
+          flex: 1 1 50%;
+        }
+        ha-card > div > *:nth-child(3) {
+          flex: 1 1 100%;
+        }
+      }
+      @media (max-width: 768px) {
+        ha-card > div {
+          flex-direction: column;
+        }
+        ha-card > div > * {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+      }
+    `,
+  },
+};
+
 
         return {
           title: 'Übersicht',
