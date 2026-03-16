@@ -3,8 +3,9 @@
  * 
  * Generates the main overview/home view.
  * Shows summary of all areas, weather, security, and system status.
+ * Column order: Time/Weather/Calendar → Rooms → Indicators (Battery/Security)
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 window.HaCustomOverviewView = {
@@ -20,11 +21,17 @@ window.HaCustomOverviewView = {
     const collectors = window.HaCustomDataCollectors;
     const builders = window.HaCustomCardBuilders;
 
-    const cards = [];
+    // Create columned layout
+    const columns = [
+      [], // Column 1: Time/Weather/Calendar
+      [], // Column 2: Rooms
+      [], // Column 3: Indicators
+    ];
 
+    // COLUMN 1: Time, Weather, Calendar
     // Welcome card
     if (config.show_welcome !== false) {
-      cards.push({
+      columns[0].push({
         type: 'markdown',
         content: `# Willkommen\n\n${this.getGreeting()}`,
       });
@@ -33,21 +40,31 @@ window.HaCustomOverviewView = {
     // Weather card
     const weatherEntity = config.weather_entity || this.findWeatherEntity(hass);
     if (weatherEntity) {
-      cards.push(builders.buildWeatherCard(weatherEntity));
+      columns[0].push(builders.buildWeatherCard(weatherEntity));
     }
 
-    // Area cards
+    // Calendar card (if configured)
+    if (config.calendar_entity) {
+      columns[0].push({
+        type: 'calendar',
+        entity: config.calendar_entity,
+      });
+    }
+
+    // COLUMN 2: Rooms (Areas)
     if (config.show_areas !== false) {
       const areaCards = this.buildAreaCards(areas, hass, entities, devices, config);
       if (areaCards.length > 0) {
-        cards.push({
+        columns[1].push({
           type: 'grid',
           cards: areaCards,
           columns: 3,
+          title: 'Räume',
         });
       }
     }
 
+    // COLUMN 3: Indicators (Battery, Security, etc.)
     // Security card
     if (config.show_security !== false) {
       const securityData = collectors.collectSecurity(hass, entities, config);
@@ -57,14 +74,22 @@ window.HaCustomOverviewView = {
         securityData.windows.length > 0 ||
         securityData.alarm
       ) {
-        cards.push(builders.buildSecurityCard(securityData));
+        columns[2].push(builders.buildSecurityCard(securityData));
+      }
+    }
+
+    // Battery status
+    if (config.show_battery_status !== false) {
+      const batteries = collectors.collectBatteries(hass, entities, config);
+      if (batteries.critical.length > 0 || batteries.low.length > 0) {
+        columns[2].push(builders.buildBatteryCard(batteries.critical, batteries.low));
       }
     }
 
     // Light summary
     if (config.show_light_summary !== false) {
       const lights = collectors.collectLights(hass, entities, config);
-      cards.push({
+      columns[2].push({
         type: 'entities',
         title: 'Beleuchtung',
         entities: [
@@ -88,19 +113,40 @@ window.HaCustomOverviewView = {
       });
     }
 
-    // Battery status
-    if (config.show_battery_status !== false) {
-      const batteries = collectors.collectBatteries(hass, entities, config);
-      if (batteries.critical.length > 0 || batteries.low.length > 0) {
-        cards.push(builders.buildBatteryCard(batteries.critical, batteries.low));
-      }
-    }
+    // Combine columns into grid layout
+    const cards = [];
+    
+    // Add columns as grid
+    const maxRows = Math.max(columns[0].length, columns[1].length, columns[2].length);
+    
+    // Create a horizontal layout with three columns
+    const layoutCard = {
+      type: 'grid',
+      cards: [
+        {
+          type: 'grid',
+          cards: columns[0],
+          columns: 1,
+        },
+        {
+          type: 'grid',
+          cards: columns[1],
+          columns: 1,
+        },
+        {
+          type: 'grid',
+          cards: columns[2],
+          columns: 1,
+        },
+      ],
+      columns: 3,
+    };
 
     return {
       title: config.title || 'Übersicht',
       path: 'overview',
       icon: config.icon || 'mdi:home',
-      cards: cards,
+      cards: [layoutCard],
     };
   },
 
