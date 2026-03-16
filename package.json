@@ -1,0 +1,32 @@
+{
+  "name": "l30neyn-dashboard-strategy",
+  "version": "2.2.0",
+  "description": "A modular, performant Home Assistant dashboard strategy with room-based organization, statistics, and comprehensive automation support",
+  "author": "L30NEYN (Leon Heyn)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/L30NEYN/L30NEYN-dashboard-strategy"
+  },
+  "keywords": [
+    "home-assistant",
+    "dashboard",
+    "strategy",
+    "ui",
+    "automation",
+    "smart-home"
+  ],
+  "scripts": {
+    "build": "python3 build.py",
+    "dev": "npm run build && echo 'Development build complete'",
+    "test": "echo 'Tests to be added'"
+  },
+  "devDependencies": {},
+  "files": [
+    "dist/",
+    "examples/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ]
+}
