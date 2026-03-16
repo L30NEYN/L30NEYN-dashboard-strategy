@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.8
+ * @version 1.9.9
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.8';
+  const VERSION = '1.9.9';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -67,7 +67,7 @@
     async resolve(hass, config) {
       const manual = config?.navigation?.dashboard_url_path;
       if (manual) {
-        const clean = String(manual).replace(/^\\/+|\\/+$/g, '');
+        const clean = String(manual).replace(/^\/+|\/+$/g, '');
         return { source: 'config', url_path: clean };
       }
       try {
@@ -685,7 +685,7 @@
     generate(hass, config, registry, basePath) {
       try {
         const { entities = [], devices = [], areas = [] } = registry;
-        const urlPath = basePath.replace(/^\\/+/, '');
+        const urlPath = basePath.replace(/^\/+/, '');
         const cards   = [];
         cards.push(Cards.title('Einstellungen', 'L30NEYN Dashboard v' + VERSION));
         cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  overview_widget_order: [weather, clock, calendar]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Kalender deaktivieren:', '  # calendar_entity: false', '  # Kalender manuell festlegen:', '  # calendar_entity: calendar.mein_kalender', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
@@ -921,7 +921,6 @@
       const showBattery  = cfg.show_battery_status !== false;
       const calDisabled  = cfg.calendar_entity === false;
 
-      // Kalender-Entity-Dropdown
       let calendarHtml = '';
       if (!this._loading && this._hass) {
         const allCalEntities = Object.keys(this._hass.states || {}).filter(id => id.startsWith('calendar.')).sort();
@@ -935,7 +934,6 @@
         calendarHtml = `<div class="opt-hint">Wird geladen…</div>`;
       }
 
-      // Widget-Reihenfolge (Wetter / Uhr / Kalender)
       const currentWidgetOrder = cfg.overview_widget_order?.length ? cfg.overview_widget_order : OVERVIEW_WIDGET_DEFS.map(w => w.key);
       const widgetSortHtml = `
         <div class="sort-list" id="widget-sort-list">
@@ -1073,7 +1071,6 @@
       });
       shadow.getElementById('battery-add-btn')?.addEventListener('click', () => { const sel = shadow.getElementById('battery-add-select'); if (sel?.value) this._addBatteryEntity(sel.value); });
       shadow.querySelectorAll('.battery-remove-btn[data-remove-battery]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._removeBatteryEntity(btn.dataset.removeBattery); }));
-      // Widget-Reihenfolge Buttons
       shadow.querySelectorAll('.sort-btn[data-move-widget]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveWidget(parseInt(btn.dataset.moveWidget), parseInt(btn.dataset.dir)); }));
       shadow.querySelectorAll('.sort-btn[data-move-col]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveColumn(parseInt(btn.dataset.moveCol), parseInt(btn.dataset.dir)); }));
       shadow.querySelectorAll('.area-sort-btn[data-move-area]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._moveArea(btn.dataset.moveArea, parseInt(btn.dataset.dir), btn.dataset.allAreas.split(',')); }));
@@ -1139,13 +1136,16 @@
   // REGISTER
   // ════════════════════════════════════════════════════════════════════════════════
 
-  const register = (name, cls) => {
-    try { customElements.define(name, cls); }
-    catch (e) { if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Registration failed:', name, e); }
-  };
+  // Editor als Custom Element registrieren (korrekt, da HTMLElement-Subklasse)
+  try {
+    customElements.define('l30neyn-dashboard-strategy-editor', L30NEYNDashboardStrategyEditor);
+  } catch (e) {
+    if (e.name !== 'NotSupportedError') console.error('[L30NEYN] Editor registration failed:', e);
+  }
 
-  register('l30neyn-dashboard-strategy-editor', L30NEYNDashboardStrategyEditor);
-  register('ll-strategy-dashboard-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
+  // Strategy über HA's eigenen Mechanismus registrieren (KEIN customElements.define!)
+  window.customDashboardStrategies = window.customDashboardStrategies || {};
+  window.customDashboardStrategies['l30neyn-dashboard-strategy'] = L30NEYNDashboardStrategy;
 
   console.info(
     `%c L30NEYN-DASHBOARD %c v${VERSION} `,
