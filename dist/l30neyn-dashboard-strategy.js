@@ -1465,7 +1465,7 @@
   };
 
   register('l30neyn-dashboard-strategy-editor',      L30NEYNDashboardStrategyEditor);
-  register('ll-strategy-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
+  register('ll-strategy-dashboard-l30neyn-dashboard-strategy', L30NEYNDashboardStrategy);
 
   console.info(
     `%c L30NEYN-DASHBOARD %c v${VERSION} `,
