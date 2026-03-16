@@ -12,6 +12,7 @@ from pathlib import Path
 
 DIST_DIR = Path('dist')
 OUTPUT_FILE = DIST_DIR / 'l30neyn-dashboard-strategy.js'
+VERSION = '2.2.0'
 
 # Module loading order
 MODULES = [
@@ -76,25 +77,26 @@ def rebrand_content(content):
 
 def build_bundle():
     """Build the complete bundle."""
-    print("Building L30NEYN Dashboard Strategy bundle...")
+    print(f"Building L30NEYN Dashboard Strategy v{VERSION}...")
     
     # Header
-    bundle = '''/**
- * L30NEYN Dashboard Strategy - Complete Bundle
+    bundle = f'''/**
+ * L30NEYN Dashboard Strategy - Complete Bundle v{VERSION}
  * 
  * A modular, performant Home Assistant dashboard strategy by L30NEYN.
  * Includes: Strategy, Views, Utils, Theme, Config, Statistics
  * 
  * @author L30NEYN (Leon Heyn)
- * @version 1.1.0
+ * @version {VERSION}
  * @license MIT
+ * @homepage https://github.com/L30NEYN/L30NEYN-dashboard-strategy
  */
 
-(function() {
+(function() {{
   'use strict';
 
   console.info(
-    '%c L30NEYN-DASHBOARD-STRATEGY %c v1.1.0 ',
+    '%c L30NEYN-DASHBOARD-STRATEGY %c v{VERSION} ',
     'background: #41BDF5; color: #fff; font-weight: bold; padding: 3px 5px;',
     'background: #4CAF50; color: #fff; font-weight: bold; padding: 3px 5px;'
   );
@@ -111,7 +113,7 @@ def build_bundle():
             bundle += content + "\n"
     
     # Footer
-    bundle += '''\n})();
+    bundle += '''\n}})();
 '''
     
     # Write output
@@ -120,6 +122,7 @@ def build_bundle():
     
     print(f"\n✅ Bundle created: {OUTPUT_FILE}")
     print(f"   Size: {len(bundle)} bytes ({len(bundle) / 1024:.1f} KB)")
+    print(f"   Version: {VERSION}")
     
     # Also update input helpers to use l30neyn_ prefix
     update_input_helpers()
@@ -150,7 +153,7 @@ if __name__ == '__main__':
     build_bundle()
     print("\n🎉 Build complete!")
     print("\nNext steps:")
-    print("  1. Test the bundle: dist/l30neyn-dashboard-strategy.js")
-    print("  2. Update README with new naming")
-    print("  3. Create GitHub release v1.1.0")
-    print("  4. Submit to HACS")
+    print(f"  1. Test the bundle: dist/l30neyn-dashboard-strategy.js")
+    print(f"  2. Create GitHub release v{VERSION}")
+    print(f"  3. Update CHANGELOG.md")
+    print(f"  4. Submit to HACS if applicable")
