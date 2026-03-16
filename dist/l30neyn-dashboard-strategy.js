@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.6
+ * @version 1.9.7
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.6';
+  const VERSION = '1.9.7';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -282,6 +282,14 @@
       };
     },
 
+    // Kalender-Karte (native HA calendar card)
+    calendar(entity) {
+      return {
+        type: 'calendar',
+        entities: [entity],
+      };
+    },
+
     roomTitle(area, aOpts) {
       return { type: 'custom:mushroom-title-card', title: aOpts?.title_override || area.name, subtitle: '' };
     },
@@ -483,6 +491,11 @@
     return { type: 'vertical-stack', cards: colCards };
   };
 
+  // Hilfsfunktion: Erste calendar.* Entity aus hass.states finden
+  const detectCalendarEntity = (hass) => {
+    return Object.keys(hass.states || {}).find(id => id.startsWith('calendar.')) || null;
+  };
+
   const OverviewView = {
     async generate(hass, config, registry, basePath) {
       try {
@@ -498,6 +511,15 @@
           const favEntities = config.favorite_entities || [];
           // Uhr als eigenständige mushroom-title-card
           cards.push(Cards.clock());
+
+          // Kalender-Karte: calendar_entity: false = deaktiviert, sonst autodetect oder explizite Entity
+          if (config.calendar_entity !== false) {
+            const calEntity = config.calendar_entity || detectCalendarEntity(hass);
+            if (calEntity && hass.states[calEntity]) {
+              cards.push(Cards.calendar(calEntity));
+            }
+          }
+
           if (favEntities.length > 0) {
             const favChips = favEntities.slice(0, 6).filter(id => hass.states[id]).map(id => ({ type: 'entity', entity: id, tap_action: { action: 'more-info' } }));
             if (favChips.length) cards.push({ type: 'custom:mushroom-chips-card', chips: favChips, alignment: 'center' });
@@ -643,7 +665,7 @@
         const urlPath = basePath.replace(/^\/+/, '');
         const cards   = [];
         cards.push(Cards.title('Einstellungen', 'L30NEYN Dashboard v' + VERSION));
-        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
+        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Kalender deaktivieren:', '  # calendar_entity: false', '  # Kalender manuell festlegen:', '  # calendar_entity: calendar.mein_kalender', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
         const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
         for (const area of sortedAreas) {
           const roomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
@@ -866,6 +888,22 @@
       const showAreas    = cfg.show_areas          !== false;
       const showSecurity = cfg.show_security       !== false;
       const showBattery  = cfg.show_battery_status !== false;
+      const calDisabled  = cfg.calendar_entity === false;
+
+      // Kalender-Entity-Dropdown
+      let calendarHtml = '';
+      if (!this._loading && this._hass) {
+        const allCalEntities = Object.keys(this._hass.states || {}).filter(id => id.startsWith('calendar.')).sort();
+        const currentCal = typeof cfg.calendar_entity === 'string' ? cfg.calendar_entity : '';
+        const calOptions = allCalEntities.map(id => `<option value="${id}" ${currentCal === id ? 'selected' : ''}>${id}</option>`).join('');
+        calendarHtml = `
+          <div class="general-row"><label>Kalender anzeigen<span class="sub">Native HA Kalender-Karte unter der Uhr</span></label><ha-switch id="sw-calendar" ${!calDisabled ? 'checked' : ''}></ha-switch></div>
+          ${!calDisabled ? `<div class="opt-row" style="padding: 0 4px"><div class="opt-label"><ha-icon icon="mdi:calendar"></ha-icon>Kalender-Entity</div><select class="opt-select" id="cal-entity-select"><option value="">– Autodetect (erste calendar.*) –</option>${calOptions}</select><div class="opt-hint">Leer = erste gefundene calendar.* Entity wird verwendet.</div></div>` : ''}
+        `;
+      } else {
+        calendarHtml = `<div class="opt-hint">Wird geladen…</div>`;
+      }
+
       const currentColOrder = cfg.column_order?.length ? cfg.column_order : COLUMN_DEFS.map(c => c.key);
       const colSortHtml = `
         <div class="sort-list" id="col-sort-list">
@@ -948,6 +986,8 @@
         <div class="general-row"><label>Raum-Übersicht anzeigen<span class="sub">Zeigt alle Bereiche als Kacheln auf der Startseite</span></label><ha-switch id="sw-areas" ${showAreas ? 'checked' : ''}></ha-switch></div>
         <div class="general-row"><label>Sicherheits-Widget anzeigen<span class="sub">Schlösser, Türen, Fenster, Alarm</span></label><ha-switch id="sw-security" ${showSecurity ? 'checked' : ''}></ha-switch></div>
         <div class="general-row"><label>Batterie-Warnungen anzeigen<span class="sub">Geräte mit niedrigem Akkustand</span></label><ha-switch id="sw-battery" ${showBattery ? 'checked' : ''}></ha-switch></div>
+        <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:calendar-clock"></ha-icon>Uhr &amp; Kalender</div>
+        ${calendarHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:view-column"></ha-icon>Spaltenreihenfolge</div>
         ${colSortHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:battery-low"></ha-icon>Batterie-Monitoring</div>
@@ -968,6 +1008,26 @@
         cfg2.floor_grouping = cfg2.floor_grouping || {};
         cfg2.floor_grouping.enabled = e.target.checked;
         this._config = cfg2; this._render(); this._fireConfigChanged();
+      });
+      // Kalender Toggle
+      shadow.getElementById('sw-calendar')?.addEventListener('change', e => {
+        if (!e.target.checked) {
+          this._setConfigValue('calendar_entity', false);
+        } else {
+          const cfg2 = JSON.parse(JSON.stringify(this._config));
+          delete cfg2.calendar_entity;
+          this._config = cfg2; this._render(); this._fireConfigChanged();
+        }
+      });
+      // Kalender Entity Select
+      shadow.getElementById('cal-entity-select')?.addEventListener('change', e => {
+        const val = e.target.value;
+        if (val) this._setConfigValue('calendar_entity', val);
+        else {
+          const cfg2 = JSON.parse(JSON.stringify(this._config));
+          delete cfg2.calendar_entity;
+          this._config = cfg2; this._render(); this._fireConfigChanged();
+        }
       });
       shadow.getElementById('battery-add-btn')?.addEventListener('click', () => { const sel = shadow.getElementById('battery-add-select'); if (sel?.value) this._addBatteryEntity(sel.value); });
       shadow.querySelectorAll('.battery-remove-btn[data-remove-battery]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); this._removeBatteryEntity(btn.dataset.removeBattery); }));
