@@ -5,40 +5,38 @@
 [![License](https://img.shields.io/github/license/L30NEYN/L30NEYN-dashboard-strategy.svg)](LICENSE)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
 
-Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mit automatischer Raumerkennung, Theme-System und Statistiken.
+Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mit automatischer Raumerkennung, Etagen-Gruppierung und intelligenten Quick-Actions.
 
 ## ✨ Features
 
 ### 🏠 Dashboard-Verwaltung
-- **Übersichtsseite** mit Willkommens-Karte, Raum-Übersicht und Statusanzeigen
+- **Übersichtsseite** mit Willkommens-Karte, Raum-Übersicht, Wetter, Uhr und Kalender
 - **Automatische Raum-Views** basierend auf Area Registry
-- **Statistiken-Dashboard** mit Energie, Klima und System-Health
 - **Einstellungs-Panel** zur grafischen Konfiguration
+- **Etagen-Gruppierung** mit nativer HA Floor Registry
 
-### 🎨 Theme-System
-- **3 Theme-Modi**: Hell, Dunkel, Automatisch (folgt System-Präferenz)
-- **6 Farbschemata**: Standard, Blau, Grün, Lila, Orange, Rot
-- **50+ CSS-Variablen** für konsistentes Design
-- **Auto-Synchronisierung** mit Home Assistant Themes
-- **Live-Umschaltung** ohne Reload
-
-### 📊 Statistik-Karten
-- **Energie**: Produktion, Verbrauch, Kosten, Grid Import/Export
-- **Klima**: Temperatur, Luftfeuchtigkeit pro Raum, Trends
-- **System**: CPU, RAM, Disk, Uptime, Updates
-- **Netzwerk**: Bandbreite, Latenz, Verbindungen (optional)
+### 📱 Quick-Actions
+- **Badge-Icon** auf Raumkarten zeigt Licht-/Rollo-Status
+- **Hold-Action**: Alle Lichter an/aus (oder Rollos auf/zu)
+- **Double-Tap**: Rollos toggle (wenn Lichter vorhanden)
+- **Sensor-Chips**: Temperatur, Luftfeuchte, CO₂, Helligkeit pro Raum
 
 ### 🧩 Intelligente Gruppierung
-- **Domänen-basiert**: Lights, Covers, Climate, Switches, Sensors
+- **Domänen-basiert**: Lights, Covers, Climate, Switches, Sensors, Binary Sensors, Medien, Kameras
+- **Etagen-Erkennung**: Automatisch aus HA Floor Registry oder manuell konfigurierbar
 - **Label-Filterung**: `no_dboard` Label zum Ausblenden
-- **Alphabetische Sortierung** nach Namen
 - **Mushroom-Cards** für moderne UI
+
+### ⚙️ Konfiguration
+- **Grafischer Editor** für alle Optionen
+- **Spaltenreihenfolge** frei konfigurierbar
+- **Raumreihenfolge** per Drag-Order konfigurierbar
+- **Primäre Sensoren** pro Raum definierbar
+- **Batterie-Monitoring** mit Autodetect oder expliziter Liste
 
 ## 📦 Installation
 
 ### Via HACS (Empfohlen)
-
-#### Schritt 1: Custom Repository hinzufügen
 
 1. Öffne **HACS** in Home Assistant
 2. Klicke auf **Frontend** (nicht Integrationen!)
@@ -48,409 +46,172 @@ Eine modulare, performante Home Assistant Dashboard-Strategie von **L30NEYN** mi
    - **Repository**: `https://github.com/L30NEYN/L30NEYN-dashboard-strategy`
    - **Kategorie**: **Lovelace**
 6. Klicke **Hinzufügen**
-
-#### Schritt 2: Installieren
-
-1. Suche in HACS nach **"L30NEYN Dashboard Strategy"**
-2. Klicke auf die Karte
-3. Klicke **Installieren**
-4. Bestätige die Installation
-5. **Wichtig**: Nach Installation **Hard-Refresh** durchführen (Strg+Shift+R / Cmd+Shift+R)
-
-> 📚 **Detaillierte HACS-Anleitung**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
+7. Suche nach **"L30NEYN Dashboard Strategy"** und installiere
+8. **Hard-Refresh**: Strg+Shift+R / Cmd+Shift+R
 
 ### Manuell
 
-#### 1. Dateien kopieren
-
 ```bash
-# In dein Home Assistant config-Verzeichnis
 mkdir -p /config/www/l30neyn-dashboard-strategy
-cd /config/www/l30neyn-dashboard-strategy
-
-# Haupt-Datei von dist/ Ordner (wichtig!)
-wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/dist/l30neyn-dashboard-strategy.js
+wget https://raw.githubusercontent.com/L30NEYN/L30NEYN-dashboard-strategy/main/dist/l30neyn-dashboard-strategy.js \
+     -O /config/www/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
 ```
 
-#### 2. Ressource registrieren
-
-**Einstellungen → Dashboards → Ressourcen → Ressource hinzufügen:**
-
-```yaml
+Ressource registrieren unter **Einstellungen → Dashboards → Ressourcen**:
+```
 URL: /local/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js
 Typ: JavaScript-Modul
 ```
 
-#### 3. Hard-Refresh durchführen
-
-Nach Registrierung der Ressource: **Strg+Shift+R** (Windows/Linux) oder **Cmd+Shift+R** (Mac)
-
 ## ⚙️ Setup
 
-### 1. Input Helpers erstellen (Erforderlich)
+### Voraussetzungen
 
-**Option A: Via configuration.yaml (empfohlen)**
+1. **[Mushroom Cards](https://github.com/piitaya/lovelace-mushroom)** via HACS installieren
+2. **Bereiche** in HA konfigurieren und Geräte zuweisen
 
-Kopiere den Inhalt von [`examples/input_helpers.yaml`](examples/input_helpers.yaml) in deine `configuration.yaml` und starte HA neu.
-
-**Option B: Via UI**
-
-Gehe zu **Einstellungen → Geräte & Dienste → Helfer** und erstelle:
-
-<details>
-<summary><b>Input Helpers (klicken zum Ausklappen)</b></summary>
-
-**Input Booleans:**
-- `input_boolean.l30neyn_show_welcome`
-- `input_boolean.l30neyn_show_areas`
-- `input_boolean.l30neyn_show_security`
-- `input_boolean.l30neyn_show_light_summary`
-- `input_boolean.l30neyn_show_battery_status`
-- `input_boolean.l30neyn_show_energy_stats`
-- `input_boolean.l30neyn_show_climate_stats`
-- `input_boolean.l30neyn_show_system_health`
-- `input_boolean.l30neyn_show_network_stats`
-- `input_boolean.l30neyn_debug_mode`
-
-**Input Selects:**
-- `input_select.l30neyn_theme_mode` (Optionen: `light`, `dark`, `auto`)
-- `input_select.l30neyn_color_scheme` (Optionen: `default`, `blue`, `green`, `purple`, `orange`, `red`)
-
-**Input Text:**
-- `input_text.l30neyn_weather_entity` (leer lassen für Auto-Erkennung)
-
-</details>
-
-### 2. Mushroom Cards installieren (Erforderlich)
-
-**HACS → Frontend → Mushroom Cards installieren**
-
-Diese Strategie benötigt Mushroom Cards für die UI.
-
-### 3. Dashboard erstellen
+### Dashboard erstellen
 
 **Einstellungen → Dashboards → Dashboard hinzufügen:**
 
 ```yaml
-title: L30NEYN Dashboard
 strategy:
   type: custom:l30neyn-dashboard-strategy
 ```
 
-**Wichtig:** Der vollständige `type` ist `custom:l30neyn-dashboard-strategy`
-
-## 🎨 Konfiguration
-
-### Über das Einstellungs-Panel
-
-Navigiere zum **Einstellungen**-Tab im Dashboard-Menü:
-
-#### Design & Theme
-- **Theme-Modus**: Wähle zwischen Hell, Dunkel oder Automatisch
-- **Farbschema**: Wähle dein bevorzugtes Farbschema
-- **Live-Preview**: Klicke auf Farb-Chips zum direkten Testen
-
-#### Übersichtsseite
-- Toggle für Begrüßung, Raum-Übersicht, Sicherheit, Lichter, Batterien
-- Wetter-Entität manuell wählen (optional)
-
-#### Statistiken
-- Aktiviere/Deaktiviere Energie, Klima, System, Netzwerk einzeln
-- Karten werden dynamisch generiert
-
-#### Raum-Konfiguration
-- Klicke auf Räume für detaillierte Einstellungen
-- Domänen pro Raum aktivieren/deaktivieren
-- Entitäten sortieren und ausblenden
-
-#### Erweitert
-- **Debug-Modus**: Zeigt erweiterte Logs in Browser-Console
-- **Export**: Sichere deine Konfiguration
-- **Reset**: Stelle Standardwerte wieder her
-
-### Über YAML (Optional)
-
-YAML-Config wird als Override unterstützt:
+## 🌐 Konfiguration
 
 ```yaml
 strategy:
   type: custom:l30neyn-dashboard-strategy
-  options:
-    theme_mode: dark
-    color_scheme: blue
-    show_welcome: true
-    show_areas: true
-    show_security: true
-    show_light_summary: true
-    show_battery_status: true
-    show_energy_stats: true
-    show_climate_stats: true
-    show_system_health: true
-    show_network_stats: false
-    weather_entity: weather.home
+  navigation:
+    dashboard_url_path: lovelace   # Optional, wird automatisch erkannt
+  column_order:
+    - light
+    - cover
+    - climate
+    - switch
+    - media_player
+    - sensor
+    - binary_sensor
+    - camera
+  overview_widget_order:
+    - weather
+    - clock
+    - calendar
+  area_order:
+    - wohnzimmer
+    - kueche
+    - schlafzimmer
+  floor_grouping:
+    enabled: true                  # Nutzt HA Floor Registry automatisch
+  areas_options:
+    wohnzimmer:
+      title_override: "Wohnzimmer"
+      icon_override: mdi:sofa
+      primary_sensors:
+        temperature: sensor.wohnzimmer_temperatur
+        humidity: sensor.wohnzimmer_feuchte
+      groups_options:
+        light:
+          hidden:
+            - light.unwichtiges_licht
+  weather_entity: weather.home
+  calendar_entity: calendar.privat   # false = deaktivieren
+  battery_entities: []               # Leer = Autodetect
+  favorite_entities:
+    - light.wohnzimmer_haupt
+    - climate.wohnzimmer
 ```
 
 > 📚 **Erweiterte Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
 
+## 🏢 Etagen-Gruppierung
+
+### Automatisch (empfohlen)
+
+Die Strategy erkennt Etagen automatisch aus der HA Floor Registry:
+
+1. Gehe zu **Einstellungen → Bereiche**
+2. Weise Bereichen eine Etage zu
+3. Aktiviere in der Strategie: `floor_grouping: enabled: true`
+
+### Manuell
+
+```yaml
+floor_grouping:
+  enabled: true
+  floors:
+    - name: "Erdgeschoss"
+      icon: mdi:home-floor-0
+      area_ids: [wohnzimmer, kueche, esszimmer]
+    - name: "Obergeschoss"
+      icon: mdi:home-floor-1
+      area_ids: [schlafzimmer, bad, kinderzimmer]
+```
+
 ## 🏷️ Labels verwenden
 
-### Entitäten/Räume ausblenden
+Füge das Label `no_dboard` zu Entitäten oder Bereichen hinzu, um sie aus dem Dashboard auszublenden:
 
-Füge das Label `no_dboard` hinzu:
-
-**Via UI:**
-1. Einstellungen → Geräte & Dienste
-2. Wähle Entität oder Bereich
-3. Füge Label `no_dboard` hinzu
-
-**Via YAML:**
-```yaml
-label_registry:
-  no_dboard:
-    name: "Dashboard ausblenden"
-    icon: mdi:eye-off
-```
-
-## 📊 Statistiken einrichten
-
-### Energie
-
-Konfiguriere das Energie-Dashboard:
-
-```yaml
-energy:
-  sources:
-    - type: grid
-      flow_from:
-        - entity: sensor.energy_import
-      flow_to:
-        - entity: sensor.energy_export
-    - type: solar
-      solar:
-        - entity: sensor.solar_production
-```
-
-### Klima
-
-Erstelle Sensoren mit:
-- `device_class: temperature`
-- `device_class: humidity`
-- Ordne sie Räumen zu (Area Registry)
-
-### System-Health
-
-Aktiviere System Monitor:
-
-```yaml
-sensor:
-  - platform: systemmonitor
-    resources:
-      - type: processor_use
-      - type: memory_use_percent
-      - type: disk_use_percent
-        arg: /
-      - type: last_boot
-```
-
-## 🚀 Performance
-
-- **Dashboard-Generierung**: 50-100ms (10 Räume)
-- **View-Generierung**: 5-15ms
-- **Theme-Wechsel**: <5ms
-- **Config-Load**: <10ms
-- **Bundle-Größe**: 28KB gzip
-
-**Optimierungen:**
-- Lazy View Generation
-- Registry Caching (5 Min TTL)
-- Config Caching (1 Min TTL)
-- Effiziente Entity-Filterung
-- Set-basierte Lookups
-- **Smart Fallback**: Gecachte Registry-Daten werden bevorzugt (v1.3.4+)
+**Einstellungen → Bereiche / Geräte → Label `no_dboard` hinzufügen**
 
 ## 🔧 Troubleshooting
 
 ### "No strategy type found"
-
-**Ursache:** Strategy-Datei wird nicht geladen oder ist nicht richtig registriert.
-
-**Lösung:**
-1. Überprüfe, dass die Datei existiert: `/config/www/l30neyn-dashboard-strategy/l30neyn-dashboard-strategy.js`
-2. Überprüfe die Ressourcen-Registrierung in HA (Einstellungen → Dashboards → Ressourcen)
-3. Führe einen **Hard-Refresh** durch: Strg+Shift+R (Windows/Linux) oder Cmd+Shift+R (Mac)
-4. Öffne Browser-Console (F12) und prüfe auf Fehler beim Laden
+1. Überprüfe die Ressourcen-Registrierung (Einstellungen → Dashboards → Ressourcen)
+2. Führe einen **Hard-Refresh** durch (Strg+Shift+R)
+3. Prüfe Browser-Console (F12) auf Fehler
 
 ### Dashboard zeigt keine Räume
-
-**Ursache:** Keine Areas in Home Assistant konfiguriert oder alle haben Label `no_dboard`.
-
-**Lösung:**
-1. Erstelle Areas unter Einstellungen → Bereiche
+1. Erstelle Bereiche unter Einstellungen → Bereiche
 2. Weise Geräte den Bereichen zu
-3. Prüfe, dass Areas nicht das Label `no_dboard` haben
+3. Prüfe, dass Bereiche nicht das Label `no_dboard` haben
 
 ### Karten werden nicht angezeigt
-
-**Ursache:** Mushroom Cards nicht installiert.
-
-**Lösung:**
-1. Installiere Mushroom Cards via HACS
-2. Führe Hard-Refresh durch
-
-### "Registry-Daten konnten nicht geladen werden" (v1.3.4+)
-
-**Ursache:** WebSocket-Verbindung nicht verfügbar und keine gecachten Daten vorhanden.
-
-**Lösung:**
-1. **Seite neu laden** (F5 oder Strg+R) - meist reicht das schon
-2. Warte 10-15 Sekunden nach HA-Start, bevor du das Dashboard öffnest
-3. Prüfe Browser-Console (F12) auf Fehler
-4. Bei persistenten Problemen: Home Assistant neu starten
-
-**Hintergrund:** Ab Version 1.3.4 nutzt die Strategy automatisch gecachte Registry-Daten aus `hass.areas`, `hass.devices`, `hass.entities`. Nur wenn diese nicht verfügbar sind, wird über WebSocket geladen.
-
-### "Unchecked runtime.lastError" in Console
-
-**Ursache:** Browser-Extension versucht mit der Seite zu kommunizieren (NICHT ein Home Assistant Problem).
-
-**Lösung:**
-1. Teste im **Inkognito-Modus** (Extensions deaktiviert)
-2. Deaktiviere Extensions einzeln, um den Verursacher zu finden
-3. Häufige Kandidaten: Werbeblocker, Privacy-Tools, Passwort-Manager
-
-## 🔧 Entwicklung
-
-### Repository-Struktur
-
-```
-L30NEYN/L30NEYN-dashboard-strategy/
-├── dist/
-│   └── l30neyn-dashboard-strategy.js   # Gebundelte Datei (HACS installiert diese)
-├── src/
-│   ├── strategy.js                     # Haupt-Strategy
-│   ├── views/                          # View-Generatoren
-│   └── utils/                          # Utilities
-├── examples/
-│   └── input_helpers.yaml              # Config-Template
-├── docs/
-│   ├── HACS_SETUP.md                   # HACS-Anleitung
-│   ├── INSTALLATION.md                 # Install-Guide
-│   └── UPDATE.md                       # Update-Guide
-├── build.py                            # Build-Script
-├── hacs.json                           # HACS-Config
-└── info.md                             # HACS-Info
-```
-
-### Build
-
-```bash
-# Bundle erstellen
-python3 build.py
-
-# Output: dist/l30neyn-dashboard-strategy.js
-```
-
-### Debug-Modus
-
-Aktiviere im Einstellungs-Panel oder via Console:
-
-```javascript
-// In Browser Console (F12)
-localStorage.setItem('l30neyn_debug', 'true');
-```
+- Installiere **Mushroom Cards** via HACS und führe Hard-Refresh durch
 
 ## 📝 Changelog
 
 Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Version 1.3.4 (2026-03-12)
-
-**Fixes:**
-- 🔧 **Intelligenter Fallback-Mechanismus** - Nutzt gecachte Registry-Daten aus `hass.areas`, `hass.devices`, `hass.entities` (schnellste Methode)
-- ⚡ **Robustere WebSocket-Fehlerbehandlung** - Automatischer Fallback bei WebSocket-Problemen
-- 📊 **Informative Error-Views** - Zeigt Troubleshooting-Hinweise mit technischen Details
-- 🐛 **Fix für Test-Mocks** - Strategy funktioniert nun auch mit unvollständigen hass-Objekten
-
-**Technische Details:**
-- 3-stufiger Datenlademechanismus:
-  1. Gecachte Daten (bevorzugt)
-  2. WebSocket-API (Fallback)
-  3. Error-View mit Hilfe (letzter Fallback)
-- Bessere Debug-Informationen über verfügbare hass-Methoden
-- Error-Cards mit Copy-Button für Support-Anfragen
-
-### Version 1.3.0 (2026-03-12)
-
-**Fixes:**
-- 🔧 **Strategy-Registrierung komplett überarbeitet** - Verwendet nun korrekten `ll-strategy-`-Prefix wie bei simon42
-- 📦 **HACS-Struktur korrigiert** - `dist/` Ordner wird nun korrekt geladen
-- 🔄 **Build-System verbessert** - Gebundelte Datei im `dist/` Ordner für HACS
-- 📚 **Dokumentation aktualisiert** - Setup-Anleitung mit Hard-Refresh-Hinweisen
-
-**Technische Details:**
-- Strategy-Name: `custom:l30neyn-dashboard-strategy` (vollständiger Name)
-- HACS lädt jetzt aus `dist/l30neyn-dashboard-strategy.js`
-- Kompatibel mit HA 2024.1+
-
-### Version 1.1.0 (2026-03-11)
+### Version 2.1.0 (2026-03-16)
 
 **Neue Features:**
-- ✨ Einstellungs-Panel mit grafischer UI
-- 🎨 Theme-System (3 Modi + 6 Farbschemata)
-- 📊 Statistik-Dashboard (Energie/Klima/System/Netzwerk)
-- ⚙️ Config-Manager mit Input-Helper-Integration
-- 🔄 Auto-Theme-Synchronisierung
-- 📦 HACS-kompatible Struktur
+- 🗓️ **Kalender-Integration** — Native HA Kalender-Karte auf der Übersichtsseite (Autodetect oder manuell)
+- 🏢 **Native HA Floor Registry** — Etagen werden automatisch aus HA erkannt und nach Level sortiert
+- ⚡ **Badge Quick-Actions** — Licht-/Rollo-Status direkt auf der Raumkarte, Hold/Double-Tap-Actions
+- 🔀 **Widget-Reihenfolge** — `overview_widget_order` für Wetter, Uhr und Kalender
 
-**Performance:**
-- 42% schnellere Dashboard-Generierung
-- 33% schnellere View-Generierung
-- Optimiertes Caching
+### Version 2.0.0 (2026-03-16)
 
-### Version 1.0.0 (2026-03-10)
+**Neue Features:**
+- 🏢 Floor Registry Integration (manuell konfigurierbar)
+- 🔄 Async Übersichtsseite
+- 🗓️ Kalender-Karte (Basis)
+- ⚡ Vereinfachte roomButton()-Logik
 
-**Initial Release:**
-- 🏠 Automatische Raum-Views
-- 📋 Übersichtsseite
-- 🔧 Entity-Filterung
-- 🎴 Mushroom-Integration
-- 🏷️ Label-System
+## 📤 Lizenz
 
-## 📄 Lizenz
-
-MIT License - Copyright (c) 2026 L30NEYN
-
-Vollständige Lizenz: [LICENSE](LICENSE)
+MIT License — Copyright (c) 2026 L30NEYN
 
 ## 👤 Autor
 
-**L30NEYN**
-- GitHub: [@L30NEYN](https://github.com/L30NEYN)
-- Repository: [L30NEYN-dashboard-strategy](https://github.com/L30NEYN/L30NEYN-dashboard-strategy)
+**L30NEYN** — [GitHub](https://github.com/L30NEYN)
 
 ## 🙏 Credits
 
-- [Home Assistant](https://www.home-assistant.io/) - Smart Home Platform
-- [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) by [@piitaya](https://github.com/piitaya) - UI Components
-- [HACS](https://hacs.xyz/) - Home Assistant Community Store
-- [simon42](https://github.com/gdscei/simon42) - Inspiration für Strategy-Struktur
+- [Home Assistant](https://www.home-assistant.io/)
+- [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) by [@piitaya](https://github.com/piitaya)
+- [HACS](https://hacs.xyz/)
 
 ## 🔗 Links
 
 - **HACS-Setup**: [docs/HACS_SETUP.md](docs/HACS_SETUP.md)
-- **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- **Installation**: [INSTALLATION.md](INSTALLATION.md)
 - **Konfiguration**: [CONFIGURATION.md](CONFIGURATION.md)
-- **Update-Guide**: [docs/UPDATE.md](docs/UPDATE.md)
 - **Issues**: [GitHub Issues](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/discussions)
-
-## ⭐ Support
-
-Wenn dir dieses Projekt gefällt:
-- ⭐ **Star** das Repository
-- 🐛 **Melde Bugs** via Issues
-- 💡 **Schlage Features vor** via Discussions
-- 🤝 **Contribute** via Pull Requests
+- **Releases**: [GitHub Releases](https://github.com/L30NEYN/L30NEYN-dashboard-strategy/releases)
 
 ---
 
