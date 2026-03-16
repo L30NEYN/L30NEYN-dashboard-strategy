@@ -3,8 +3,9 @@
  * 
  * Generates individual room views with grouped entity controls.
  * Supports lights, covers, sensors, climate, media, and more.
+ * Includes group control cards at the top for batch operations.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 window.HaCustomRoomView = {
@@ -24,7 +25,7 @@ window.HaCustomRoomView = {
   // Domain title map
   DOMAIN_TITLES: {
     light: 'Beleuchtung',
-    cover: 'Rollos & Vorhänge',
+    cover: 'Rollos & Vorhang',
     climate: 'Klima',
     fan: 'Ventilatoren',
     switch: 'Schalter',
@@ -67,13 +68,29 @@ window.HaCustomRoomView = {
 
     const cards = [];
 
-    // Add group control cards for controllable domains
+    // Add header with room description
+    cards.push({
+      type: 'markdown',
+      content: `# ${area.name}\n\nRäumliche Steuerung und Status`,
+    });
+
+    // Add group control cards for controllable domains (only if multiple entities)
     if (roomEntities.light && roomEntities.light.length > 1) {
-      cards.push(builders.buildGroupControlCard(roomEntities.light, 'light'));
+      const lightControl = builders.buildGroupControlCard(
+        roomEntities.light,
+        'light',
+        { title: 'Lichtersteuerung' }
+      );
+      cards.push(lightControl);
     }
 
     if (roomEntities.cover && roomEntities.cover.length > 1) {
-      cards.push(builders.buildGroupControlCard(roomEntities.cover, 'cover'));
+      const coverControl = builders.buildGroupControlCard(
+        roomEntities.cover,
+        'cover',
+        { title: 'Rollos & Vorhänge' }
+      );
+      cards.push(coverControl);
     }
 
     // Build domain cards in order
@@ -89,6 +106,7 @@ window.HaCustomRoomView = {
     // Add remaining domains not in order
     for (const domain in roomEntities) {
       if (this.DOMAIN_ORDER.includes(domain)) continue;
+      if (!roomEntities[domain] || roomEntities[domain].length === 0) continue;
 
       const card = this.buildDomainCard(domain, roomEntities[domain], hass, config);
       if (card) {
@@ -100,7 +118,7 @@ window.HaCustomRoomView = {
       title: area.name,
       path: areaId,
       icon: area.icon || 'mdi:home',
-      cards: cards.length > 0 ? cards : [{
+      cards: cards.length > 1 ? cards : [{
         type: 'markdown',
         content: 'Keine Geräte in diesem Raum.',
       }],
