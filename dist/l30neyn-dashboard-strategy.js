@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 1.9.4
+ * @version 1.9.5
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '1.9.4';
+  const VERSION = '1.9.5';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
@@ -41,6 +41,22 @@
       return { areas: areas || [], devices: devices || [], entities: entities || [], source: 'websocket' };
     } catch (e) {
       return { areas: [], devices: [], entities: [], source: 'error', error: e.message };
+    }
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════════
+  // MODUL 2b — FLOOR REGISTRY LOADER
+  // ════════════════════════════════════════════════════════════════════════════════
+
+  const loadFloors = async (hass) => {
+    // hass.floors is available in HA 2024.4+
+    if (hass.floors) return Object.values(hass.floors);
+    try {
+      const floors = await callWS(hass, { type: 'config/floor_registry/list' });
+      return Array.isArray(floors) ? floors : [];
+    } catch (e) {
+      console.warn('[L30NEYN] Floor registry not available:', e.message);
+      return [];
     }
   };
 
@@ -161,6 +177,37 @@
         if (filtered.length) result[domain] = filtered.map(e => e.entity_id);
       }
       return result;
+    },
+
+    // Build floor groups from HA floor registry + area.floor_id
+    // Falls back to manual config floors if no HA floors exist
+    buildFloorGroups(areas, haFloors, configFloors) {
+      // Priority 1: HA Floor Registry (area.floor_id)
+      if (haFloors && haFloors.length > 0) {
+        // Sort floors by level if available, then by name
+        const sorted = [...haFloors].sort((a, b) => {
+          if (a.level != null && b.level != null) return a.level - b.level;
+          if (a.level != null) return -1;
+          if (b.level != null) return 1;
+          return (a.name || '').localeCompare(b.name || '', 'de');
+        });
+        return sorted.map(floor => ({
+          floor_id: floor.floor_id,
+          name:     floor.name || floor.floor_id,
+          icon:     floor.icon || 'mdi:floor-plan',
+          area_ids: areas.filter(a => a.floor_id === floor.floor_id).map(a => a.area_id),
+        })).filter(f => f.area_ids.length > 0);
+      }
+      // Priority 2: Manual config floors
+      if (configFloors && configFloors.length > 0) {
+        return configFloors.map(f => ({
+          floor_id: f.id || f.name,
+          name:     f.name || 'Etage',
+          icon:     f.icon || 'mdi:floor-plan',
+          area_ids: f.area_ids || [],
+        })).filter(f => f.area_ids.length > 0);
+      }
+      return [];
     },
   };
   const R = RegistryHelpers;
@@ -301,7 +348,6 @@
         secondary = aOpts.subtitle;
       }
 
-      // badge_icon / badge_color: Licht-Status als primäres Badge
       let badge_icon  = undefined;
       let badge_color = undefined;
       if (lights.length > 0) {
@@ -314,7 +360,6 @@
         badge_color = `{{ 'blue' if [${idList}] | select('is_state','open') | list | count > 0 else 'disabled' }}`;
       }
 
-      // hold_action: Licht toggle; double_tap_action: Cover toggle
       const holdAction = lights.length > 0
         ? {
             action: 'call-service',
@@ -436,7 +481,7 @@
   };
 
   const OverviewView = {
-    generate(hass, config, registry, basePath) {
+    async generate(hass, config, registry, basePath) {
       try {
         const { entities = [], devices = [], areas = [] } = registry;
         const cards = [];
@@ -476,18 +521,29 @@
               cards.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
             }
           } else {
-            const floors = floorConfig.floors || [];
-            floors.forEach(floor => {
-              const floorAreas = filteredAreas.filter(a => floor.area_ids.includes(a.area_id));
-              if (!floorAreas.length) return;
-              cards.push(Cards.title(floor.name || 'Etage', '', floor.icon || 'mdi:floor-plan'));
-              cards.push({ type: 'grid', cards: floorAreas.map(buildRoomCardEntry), columns: 2, square: false });
-            });
-            const assignedIds = new Set(floors.flatMap(f => f.area_ids || []));
-            const unassigned = filteredAreas.filter(a => !assignedIds.has(a.area_id));
-            if (unassigned.length > 0) {
-              cards.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
-              cards.push({ type: 'grid', cards: unassigned.map(buildRoomCardEntry), columns: 2, square: false });
+            // Load HA floor registry and build floor groups
+            const haFloors = await loadFloors(hass);
+            const floorGroups = R.buildFloorGroups(filteredAreas, haFloors, floorConfig.floors);
+
+            if (floorGroups.length === 0) {
+              // No floors configured anywhere — show all areas in one grid with hint
+              console.warn('[L30NEYN] Floor grouping enabled but no floors found in HA registry or config. Showing all areas.');
+              cards.push({ type: 'custom:mushroom-title-card', title: 'Alle Räume', subtitle: 'Keine Etagen konfiguriert – Räume in HA Etagen einteilen' });
+              cards.push({ type: 'grid', cards: filteredAreas.map(buildRoomCardEntry), columns: 2, square: false });
+            } else {
+              floorGroups.forEach(floor => {
+                const floorAreas = filteredAreas.filter(a => floor.area_ids.includes(a.area_id));
+                if (!floorAreas.length) return;
+                cards.push(Cards.title(floor.name, '', floor.icon));
+                cards.push({ type: 'grid', cards: floorAreas.map(buildRoomCardEntry), columns: 2, square: false });
+              });
+              // Räume ohne Etage
+              const assignedIds = new Set(floorGroups.flatMap(f => f.area_ids));
+              const unassigned = filteredAreas.filter(a => !assignedIds.has(a.area_id));
+              if (unassigned.length > 0) {
+                cards.push(Cards.title('Weitere Räume', '', 'mdi:home-outline'));
+                cards.push({ type: 'grid', cards: unassigned.map(buildRoomCardEntry), columns: 2, square: false });
+              }
             }
           }
         }
@@ -586,7 +642,7 @@
         const urlPath = basePath.replace(/^\/+/, '');
         const cards   = [];
         cards.push(Cards.title('Einstellungen', 'L30NEYN Dashboard v' + VERSION));
-        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '```'].join('\n') });
+        cards.push({ type: 'markdown', content: ['## Konfiguration', `Erkannter Dashboard-\`url_path\`: **\`${urlPath}\`**`, '', '```yaml', 'strategy:', '  type: custom:l30neyn-dashboard-strategy', '  navigation:', `    dashboard_url_path: ${urlPath}`, '  column_order: [light, cover, climate, switch, media_player, sensor, binary_sensor, camera]', '  area_order: []', '  # Räume ausblenden:', '  areas_options:', '    <area_id>:', '      hidden: true', '  # Batterie-Entities manuell festlegen (leer = Autodetect):', '  battery_entities: []', '  # Etagen-Gruppierung (automatisch via HA Floor Registry):', '  floor_grouping:', '    enabled: true', '```'].join('\n') });
         const sortedAreas = R.sortAreas(R.filterAreas(areas), config.area_order);
         for (const area of sortedAreas) {
           const roomEntities = R.getRoomEntities(area.area_id, entities, devices, {});
@@ -880,7 +936,9 @@
               ${sensorDropdowns ? `<div class="opt-row"><div class="opt-label" style="margin-bottom:10px"><ha-icon icon="mdi:star"></ha-icon>Führende Sensoren (Chip-Header)</div><div class="opt-hint" style="margin-bottom:8px">Werden als Badges im Raum-Header angezeigt.</div>${sensorDropdowns}</div>` : ''}
               <div class="opt-row"><div class="opt-label"><ha-icon icon="mdi:lightbulb-outline"></ha-icon>Licht-Indikator</div><select class="opt-select" data-area="${aId}" data-opt-key="light_indicator"><option value="">– automatisch –</option>${(allByDomain['light'] || []).map(id => { const entObj = entities.find(e => e.entity_id === id); const fname = entObj?.name || entObj?.original_name || id; return `<option value="${id}" ${aOpts.light_indicator === id ? 'selected' : ''}>${fname}</option>`; }).join('')}</select><div class="opt-hint">Färbt Raum-Kachel amber wenn Licht an</div></div>
             </div>`;
-            return `<div class="area-card"><div class="area-header${isOpen ? ' open' : ''}" data-area="${aId}"><div class="area-header-left"><ha-icon icon="${aOpts.icon_override || area.icon || 'mdi:home'}"></ha-icon>${aOpts.title_override || area.name}</div><div class="area-header-right">${isHidden ? '<span class="badge-hidden">ausgeblendet</span>' : ''}<span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span><button class="area-sort-btn" data-move-area="${aId}" data-dir="-1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === 0 ? 'disabled' : ''} title="Raum nach oben">↑</button><button class="area-sort-btn" data-move-area="${aId}" data-dir="1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === sorted.length - 1 ? 'disabled' : ''} title="Raum nach unten">↓</button><ha-icon class="chevron${isOpen ? ' open' : ''}" icon="mdi:chevron-down"></ha-icon></div></div><div class="area-content${isOpen ? ' open' : ''}" data-area="${aId}"><div class="tabs"><button class="tab-btn${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">💡 Geräte</button><button class="tab-btn${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">⚙️ Raumoptionen</button></div><div class="tab-pane${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Geräte in diesem Raum.</div>'}</div><div class="tab-pane${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">${roomOptsHtml}</div></div></div>`;
+            // Show which floor this area belongs to (from hass.areas)
+            const floorId = area.floor_id ? ` · Etage: ${area.floor_id}` : '';
+            return `<div class="area-card"><div class="area-header${isOpen ? ' open' : ''}" data-area="${aId}"><div class="area-header-left"><ha-icon icon="${aOpts.icon_override || area.icon || 'mdi:home'}"></ha-icon>${aOpts.title_override || area.name}<span style="font-size:11px;color:var(--secondary-text-color);font-weight:400;margin-left:6px">${floorId}</span></div><div class="area-header-right">${isHidden ? '<span class="badge-hidden">ausgeblendet</span>' : ''}<span class="badge${hiddenCount > 0 ? ' visible' : ''}">${hiddenCount} ausgeblendet</span><button class="area-sort-btn" data-move-area="${aId}" data-dir="-1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === 0 ? 'disabled' : ''} title="Raum nach oben">↑</button><button class="area-sort-btn" data-move-area="${aId}" data-dir="1" data-all-areas="${allAreaIds.join(',')}" ${areaIdx === sorted.length - 1 ? 'disabled' : ''} title="Raum nach unten">↓</button><ha-icon class="chevron${isOpen ? ' open' : ''}" icon="mdi:chevron-down"></ha-icon></div></div><div class="area-content${isOpen ? ' open' : ''}" data-area="${aId}"><div class="tabs"><button class="tab-btn${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">💡 Geräte</button><button class="tab-btn${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">⚙️ Raumoptionen</button></div><div class="tab-pane${curTab === 'devices' ? ' active' : ''}" data-area="${aId}" data-tab="devices">${domainBlocks || '<div style="padding:12px 16px;color:var(--secondary-text-color);font-size:13px">Keine Geräte in diesem Raum.</div>'}</div><div class="tab-pane${curTab === 'options' ? ' active' : ''}" data-area="${aId}" data-tab="options">${roomOptsHtml}</div></div></div>`;
           }).join('');
         }
       }
@@ -896,7 +954,8 @@
         <div class="opt-hint" style="margin-bottom:6px">Manuell gepflegte Liste überschreibt die automatische Erkennung. Leer = alle Batterie-Sensoren werden erkannt.</div>
         ${batteryHtml}
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:floor-plan"></ha-icon>Etagen-Gruppierung</div>
-        <div class="general-row"><label>Etagen aktivieren<span class="sub">Räume nach Etagen auf der Übersichtsseite gruppieren</span></label><ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch></div>
+        <div class="general-row"><label>Etagen aktivieren<span class="sub">Räume nach HA-Etagen gruppieren (Einstellungen → Bereiche & Zonen → Etagen)</span></label><ha-switch id="sw-floor-grouping" ${cfg.floor_grouping?.enabled ? 'checked' : ''}></ha-switch></div>
+        <div class="opt-hint" style="margin-top:4px">Etagen werden automatisch aus der HA Floor Registry gelesen. Räume den Etagen in HA zuordnen, nicht hier.</div>
         <div class="section-header" style="margin-top:28px"><ha-icon icon="mdi:home-city"></ha-icon>Räume</div>
         <div id="areas-container">${areasHtml}</div>
         <div class="editor-footer">L30NEYN Dashboard Strategy v${VERSION}</div>
@@ -942,7 +1001,7 @@
         }
         const registry = { areas: registryData.areas, devices: registryData.devices, entities: registryData.entities };
         const views    = [];
-        views.push(OverviewView.generate(hass, config, registry, basePath));
+        views.push(await OverviewView.generate(hass, config, registry, basePath));
         const sortedAreas = R.sortAreas(
           registryData.areas.filter(a => a?.area_id && !a.labels?.includes('no_dboard')),
           config.area_order
@@ -965,7 +1024,7 @@
         show_areas: true, show_security: true, show_battery_status: true,
         show_clock_favorites: true, show_domain_overviews: true,
         favorite_entities: [], domain_groups: [],
-        floor_grouping: { enabled: false, floors: [] },
+        floor_grouping: { enabled: false },
         navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: []
       };
     }
