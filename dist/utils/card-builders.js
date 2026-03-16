@@ -4,7 +4,7 @@
  * Creates Lovelace card configurations.
  * Handles different card types and options.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 window.HaCustomCardBuilders = {
@@ -66,6 +66,7 @@ window.HaCustomCardBuilders = {
 
   /**
    * Build group control card
+   * Provides buttons to control multiple entities at once
    * @param {Array} entities - Entity IDs
    * @param {string} domain - Entity domain (light, cover, etc.)
    * @param {Object} options - Card options
@@ -83,24 +84,24 @@ window.HaCustomCardBuilders = {
     if (domain === 'light') {
       config.entities.push({
         type: 'button',
-        name: 'Alle an',
+        name: 'Alle Lichter an',
         icon: 'mdi:lightbulb-on',
         tap_action: {
           action: 'call-service',
           service: 'light.turn_on',
-          service_data: {
+          data: {
             entity_id: entities,
           },
         },
       });
       config.entities.push({
         type: 'button',
-        name: 'Alle aus',
+        name: 'Alle Lichter aus',
         icon: 'mdi:lightbulb-off',
         tap_action: {
           action: 'call-service',
           service: 'light.turn_off',
-          service_data: {
+          data: {
             entity_id: entities,
           },
         },
@@ -113,7 +114,7 @@ window.HaCustomCardBuilders = {
         tap_action: {
           action: 'call-service',
           service: 'cover.open_cover',
-          service_data: {
+          data: {
             entity_id: entities,
           },
         },
@@ -125,7 +126,7 @@ window.HaCustomCardBuilders = {
         tap_action: {
           action: 'call-service',
           service: 'cover.close_cover',
-          service_data: {
+          data: {
             entity_id: entities,
           },
         },
