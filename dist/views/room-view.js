@@ -1,11 +1,14 @@
 /**
- * HA Custom Dashboard Strategy - Room View
+ * L30NEYN Dashboard Strategy - Room View v2.2.0
  * 
- * Generates individual room views with grouped entity controls.
- * Supports lights, covers, sensors, climate, media, and more.
- * Includes group control cards at the top for batch operations.
+ * Generates individual room views with integrated group controls.
+ * Features:
+ * - Light group controls (All On / All Off)
+ * - Cover group controls (All Open / All Close)
+ * - Organized by domain with proper titles
+ * - Dynamic control display based on device count
  * 
- * @version 1.1.0
+ * @version 2.2.0
  */
 
 window.HaCustomRoomView = {
@@ -25,7 +28,7 @@ window.HaCustomRoomView = {
   // Domain title map
   DOMAIN_TITLES: {
     light: 'Beleuchtung',
-    cover: 'Rollos & Vorhang',
+    cover: 'Rollos & Vorhänge',
     climate: 'Klima',
     fan: 'Ventilatoren',
     switch: 'Schalter',
@@ -68,30 +71,45 @@ window.HaCustomRoomView = {
 
     const cards = [];
 
-    // Add header with room description
+    // Room header
     cards.push({
       type: 'markdown',
-      content: `# ${area.name}\n\nRäumliche Steuerung und Status`,
+      content: `# ${area.name}\n🎪 Räumliche Steuerung`,
     });
 
-    // Add group control cards for controllable domains (only if multiple entities)
+    // ========== GROUP CONTROL CARDS ==========
+    const controlCards = [];
+
+    // Light controls (show if 2+ lights)
     if (roomEntities.light && roomEntities.light.length > 1) {
-      const lightControl = builders.buildGroupControlCard(
+      const lightControl = this.buildGroupControlCard(
         roomEntities.light,
         'light',
-        { title: 'Lichtersteuerung' }
+        { title: '💱 Lichter' }
       );
-      cards.push(lightControl);
+      controlCards.push(lightControl);
     }
 
+    // Cover controls (show if 2+ covers)
     if (roomEntities.cover && roomEntities.cover.length > 1) {
-      const coverControl = builders.buildGroupControlCard(
+      const coverControl = this.buildGroupControlCard(
         roomEntities.cover,
         'cover',
-        { title: 'Rollos & Vorhänge' }
+        { title: '👁 Rollos & Vorhänge' }
       );
-      cards.push(coverControl);
+      controlCards.push(coverControl);
     }
+
+    // Add control cards in a grid if they exist
+    if (controlCards.length > 0) {
+      cards.push({
+        type: 'grid',
+        cards: controlCards,
+        columns: Math.min(2, controlCards.length),
+      });
+    }
+
+    // ========== DOMAIN CARDS ==========
 
     // Build domain cards in order
     for (const domain of this.DOMAIN_ORDER) {
@@ -103,7 +121,7 @@ window.HaCustomRoomView = {
       }
     }
 
-    // Add remaining domains not in order
+    // Add remaining domains not in predefined order
     for (const domain in roomEntities) {
       if (this.DOMAIN_ORDER.includes(domain)) continue;
       if (!roomEntities[domain] || roomEntities[domain].length === 0) continue;
@@ -123,6 +141,75 @@ window.HaCustomRoomView = {
         content: 'Keine Geräte in diesem Raum.',
       }],
     };
+  },
+
+  /**
+   * Build group control card for domain
+   * @param {Array} entityIds - Entity IDs
+   * @param {string} domain - Entity domain (light, cover, etc.)
+   * @param {Object} options - Card options
+   * @returns {Object} Control card config
+   */
+  buildGroupControlCard(entityIds, domain, options = {}) {
+    const config = {
+      type: 'entities',
+      entities: [],
+      ...options,
+    };
+
+    if (domain === 'light') {
+      config.entities.push({
+        type: 'button',
+        name: '💡 Alle an',
+        icon: 'mdi:lightbulb-on',
+        tap_action: {
+          action: 'call-service',
+          service: 'light.turn_on',
+          data: {
+            entity_id: entityIds,
+          },
+        },
+      });
+      config.entities.push({
+        type: 'button',
+        name: '💥 Alle aus',
+        icon: 'mdi:lightbulb-off',
+        tap_action: {
+          action: 'call-service',
+          service: 'light.turn_off',
+          data: {
+            entity_id: entityIds,
+          },
+        },
+      });
+    } else if (domain === 'cover') {
+      config.entities.push({
+        type: 'button',
+        name: '⬆️ Alle öffnen',
+        icon: 'mdi:arrow-up',
+        tap_action: {
+          action: 'call-service',
+          service: 'cover.open_cover',
+          data: {
+            entity_id: entityIds,
+          },
+        },
+      });
+      config.entities.push({
+        type: 'button',
+        name: '⬇️ Alle schließen',
+        icon: 'mdi:arrow-down',
+        tap_action: {
+          action: 'call-service',
+          service: 'cover.close_cover',
+          data: {
+            entity_id: entityIds,
+          },
+        },
+      });
+    }
+
+    return config;
   },
 
   /**
@@ -176,4 +263,4 @@ window.HaCustomRoomView = {
   },
 };
 
-console.info('[Room View] Module loaded');
+console.info('[L30NEYN Room View] Module loaded - v2.2.0');
