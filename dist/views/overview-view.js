@@ -1,212 +1,211 @@
 /**
- * L30NEYN Dashboard Strategy - Overview View v2.2.0
- * 
- * Generates the main overview/home view with FIXED column layout:
- * - Column LEFT: Admin, Keller, Warnungen
- * - Column RIGHT: Gästezimmer, Küche, Wohnzimmer, Oben
- * 
- * Uses data-column (left/right) and data-order attributes for
- * reliable layout management and automatic sorting.
- * 
- * @version 2.2.0
+ * L30NEYN Dashboard Strategy - Overview View v2.3.0
+ *
+ * Überarbeitete Übersichtsseite mit:
+ * - Zusammenfassungsblock (Lichter, Rollos, Sicherheit, Batterien)
+ * - Layout als "sections"-View mit Grids (ähnlich simon42-Strategy)
+ *   -> Auf großen Bildschirmen mehrere Spalten
+ *   -> Auf Handy / kleinen Displays stapeln sich die Sections automatisch
  */
 
 window.L30NEYNOverviewView = {
   /**
-   * Generate overview view with fixed 2-column layout
+   * Generate overview view
    * @param {Object} hass - Home Assistant object
    * @param {Object} config - Strategy config
    * @param {Object} registry - Entity/device/area registry
    * @returns {Object} View config
    */
   generate(hass, config, registry) {
-    const { entities, devices, areas } = registry;
+    const { entities = [], devices = [], areas = [] } = registry;
     const collectors = window.L30NEYNDataCollectors;
     const builders = window.L30NEYNCardBuilders;
 
-    // Define column structure (LEFT / RIGHT)
-    const COLUMN_LAYOUT = {
-      left: [],   // Admin, Warnungen, Keller, etc
-      right: [], // Gästezimmer, Küche, Wohnzimmer, HWR, Oben
-    };
+    // ------------------------------------------------------------------
+    // 1) Zusammenfassungswerte berechnen
+    // ------------------------------------------------------------------
 
-    // ========== WELCOME / GREETING ==========
-    const welcomeCard = {
-      type: 'markdown',
+    // Lichter: alle light.* mit state "on"
+    const lightsOnCount = Object.keys(hass.states || {})
+      .filter((id) => id.startsWith("light."))
+      .filter((id) => hass.states[id]?.state === "on").length;
+
+    // Rollos: alle cover.* mit state "open"
+    const coversOpenCount = Object.keys(hass.states || {})
+      .filter((id) => id.startsWith("cover."))
+      .filter((id) => hass.states[id]?.state === "open").length;
+
+    // Sicherheit: nicht verriegelte Locks + offene Tür-/Fenster-Binary-Sensoren
+    let unsafeCount = 0;
+
+    Object.keys(hass.states || {})
+      .filter((id) => id.startsWith("lock."))
+      .forEach((id) => {
+        const s = hass.states[id];
+        if (s && s.state && s.state !== "locked") {
+          unsafeCount += 1;
+        }
+      });
+
+    Object.keys(hass.states || {})
+      .filter((id) => id.startsWith("binary_sensor."))
+      .forEach((id) => {
+        const s = hass.states[id];
+        const dc = s?.attributes?.device_class;
+        if (!s || !dc) return;
+        if ((dc === "door" || dc === "garage_door" || dc === "window") && s.state === "on") {
+          unsafeCount += 1;
+        }
+      });
+
+    // Batterien: Nutzung der bestehenden Collector-Logik
+    const batteries = collectors.collectBatteries(hass, entities, config);
+    const criticalBatteryCount = (batteries.critical || []).length;
+
+    // ------------------------------------------------------------------
+    // 2) Linke Section: Begrüßung + Zusammenfassungen + Wetter/Kalender
+    // ------------------------------------------------------------------
+
+    const leftCards = [];
+
+    // Begrüßung (wie bisher, nur als Markdown-Heading)
+    leftCards.push({
+      type: "markdown",
       content: `# ${this.getGreeting()}\n**${this.getDateString()}**`,
-    };
-    COLUMN_LAYOUT.left.push({
-      card: welcomeCard,
-      order: 0,
     });
 
-    // ========== WEATHER ==========
+    // Zusammenfassungsblock (Überschrift + 2x2 Grid)
+    leftCards.push({
+      type: "markdown",
+      content: "## Zusammenfassungen",
+    });
+
+    const summaryCards = [
+      {
+        type: "button",
+        name: lightsOnCount === 0 ? "Alle Lichter aus" : `${lightsOnCount} Lichter an`,
+        icon: "mdi:lightbulb-group",
+        show_state: false,
+      },
+      {
+        type: "button",
+        name:
+          coversOpenCount === 0
+            ? "Alle Rollos geschlossen"
+            : `${coversOpenCount} Rollos offen`,
+        icon: "mdi:window-shutter",
+        show_state: false,
+      },
+      {
+        type: "button",
+        name: unsafeCount === 0 ? "Alles sicher" : `${unsafeCount} unsicher`,
+        icon: "mdi:shield-home",
+        show_state: false,
+      },
+      {
+        type: "button",
+        name:
+          criticalBatteryCount === 0
+            ? "Batterien ok"
+            : `${criticalBatteryCount} Batterien kritisch`,
+        icon: "mdi:battery-alert",
+        show_state: false,
+      },
+    ];
+
+    leftCards.push({
+      type: "grid",
+      columns: 2,
+      square: false,
+      cards: summaryCards,
+    });
+
+    // Wetter (optional wie bisher)
     const weatherEntity = config.weather_entity || this.findWeatherEntity(hass);
     if (weatherEntity) {
-      const weatherCard = builders.buildWeatherCard(weatherEntity);
-      COLUMN_LAYOUT.left.push({
-        card: weatherCard,
-        order: 1,
-      });
+      const weatherCard = builders.buildWeatherCard
+        ? builders.buildWeatherCard(weatherEntity)
+        : {
+            type: "weather-forecast",
+            entity: weatherEntity,
+            show_forecast: true,
+          };
+
+      leftCards.push(weatherCard);
     }
 
-    // ========== CALENDAR ==========
+    // Kalender (optional wie bisher)
     if (config.calendar_entity) {
-      const calendarCard = {
-        type: 'calendar',
+      leftCards.push({
+        type: "calendar",
         entity: config.calendar_entity,
-      };
-      COLUMN_LAYOUT.left.push({
-        card: calendarCard,
-        order: 2,
       });
     }
 
-    // ========== ADMIN SECTION ==========
-    COLUMN_LAYOUT.left.push({
-      card: {
-        type: 'markdown',
-        content: '## ⚙️ Admin',
-      },
-      order: 10,
-    });
+    const leftSection = {
+      type: "grid",
+      cards: leftCards,
+    };
 
-    COLUMN_LAYOUT.left.push({
-      card: {
-        type: 'entities',
-        title: 'Admin',
-        entities: ['switch.automations_enabled', 'switch.maintenance_mode'],
-      },
-      order: 11,
-    });
+    // ------------------------------------------------------------------
+    // 3) Rechte Section: Räume + Batteriewarnungen (wie bisher, gruppiert)
+    // ------------------------------------------------------------------
 
-    COLUMN_LAYOUT.left.push({
-      card: {
-        type: 'entities',
-        title: 'Automatisierungen',
-        entities: ['automation.morning_routine', 'automation.evening_routine'],
-      },
-      order: 12,
-    });
+    const rightCards = [];
 
-    // ========== ROOMS / AREAS ==========
-    let areaOrder = 20;
+    // Räume grob gruppieren wie bisher (Keller / EG / Gäste / Küche / Wohnzimmer / Oben)
     const areasByType = this.groupAreasByLocation(areas, config);
 
-    // Keller
-    for (const area of areasByType.basement || []) {
-      const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-      COLUMN_LAYOUT.left.push({
-        card: areaCard,
-        order: areaOrder++,
-      });
-    }
-
-    // Erdgeschoss
-    for (const area of areasByType.ground || []) {
-      const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-      COLUMN_LAYOUT.left.push({
-        card: areaCard,
-        order: areaOrder++,
-      });
-    }
-
-    // Gästebad (RIGHT)
-    if (areasByType.guestroom || []) {
-      let guestOrder = 0;
-      for (const area of areasByType.guestroom) {
-        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-        COLUMN_LAYOUT.right.push({
-          card: areaCard,
-          order: guestOrder++,
-        });
+    const pushAreas = (list = []) => {
+      for (const area of list) {
+        rightCards.push(this.buildAreaCard(area, hass, entities, devices, config));
       }
-    }
+    };
 
-    // Küche (RIGHT)
-    if (areasByType.kitchen || []) {
-      let kitchenOrder = 10;
-      for (const area of areasByType.kitchen) {
-        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-        COLUMN_LAYOUT.right.push({
-          card: areaCard,
-          order: kitchenOrder++,
-        });
-      }
-    }
+    pushAreas(areasByType.basement);
+    pushAreas(areasByType.ground);
+    pushAreas(areasByType.guestroom);
+    pushAreas(areasByType.kitchen);
+    pushAreas(areasByType.livingroom);
+    pushAreas(areasByType.upper);
+    pushAreas(areasByType.other);
 
-    // Wohnzimmer (RIGHT)
-    if (areasByType.livingroom || []) {
-      let livingOrder = 20;
-      for (const area of areasByType.livingroom) {
-        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-        COLUMN_LAYOUT.right.push({
-          card: areaCard,
-          order: livingOrder++,
-        });
-      }
-    }
-
-    // Oben (RIGHT)
-    if (areasByType.upper || []) {
-      let upperOrder = 30;
-      for (const area of areasByType.upper) {
-        const areaCard = this.buildAreaCard(area, hass, entities, devices, config);
-        COLUMN_LAYOUT.right.push({
-          card: areaCard,
-          order: upperOrder++,
-        });
-      }
-    }
-
-    // ========== WARNINGS / BATTERY ==========
-    const batteries = collectors.collectBatteries(hass, entities, config);
+    // Batterie-Warnungen (Detail-Liste) – nutzt bestehenden Builder
     if (batteries.critical.length > 0 || batteries.low.length > 0) {
-      const batteryCard = builders.buildBatteryCard(batteries.critical, batteries.low);
-      COLUMN_LAYOUT.left.push({
-        card: batteryCard,
-        order: 100,
-      });
+      const batteryCard = builders.buildBatteryCard
+        ? builders.buildBatteryCard(batteries.critical, batteries.low)
+        : {
+            type: "entities",
+            title: "Batterie-Warnung",
+            entities: [...batteries.critical, ...batteries.low],
+          };
+
+      rightCards.push(batteryCard);
     }
 
-    // ========== COMPILE CARDS WITH data-column AND data-order ==========
-    const leftCards = COLUMN_LAYOUT.left
-      .sort((a, b) => a.order - b.order)
-      .map((item, index) => ({
-        ...item.card,
-        'data-column': 'left',
-        'data-order': item.order,
-      }));
+    const rightSection = {
+      type: "grid",
+      cards: rightCards,
+    };
 
-    const rightCards = COLUMN_LAYOUT.right
-      .sort((a, b) => a.order - b.order)
-      .map((item, index) => ({
-        ...item.card,
-        'data-column': 'right',
-        'data-order': item.order,
-      }));
+    // ------------------------------------------------------------------
+    // 4) View als "sections"-View zurückgeben (ähnlich simon42)
+    //     -> max_columns 3 sorgt für 2–3 Spalten am Desktop
+    //     -> auf Handy werden Sections automatisch untereinander angeordnet
+    // ------------------------------------------------------------------
 
-    // ========== RETURN VIEW WITH GRID LAYOUT ==========
     return {
-      title: config.title || 'Übersicht',
-      path: 'overview',
-      icon: config.icon || 'mdi:home',
-      cards: [
-        {
-          type: 'grid',
-          cards: [...leftCards, ...rightCards],
-          columns: 2,
-        },
-      ],
+      title: config.title || "Übersicht",
+      path: "overview",
+      icon: config.icon || "mdi:home",
+      type: "sections",
+      max_columns: 3,
+      sections: [leftSection, rightSection],
     };
   },
 
-  /**
-   * Group areas by location type
-   * @param {Array} areas - Area registry
-   * @param {Object} config - Strategy config
-   * @returns {Object} Grouped areas by type
-   */
+  // --------- Hilfsfunktionen (unverändert / leicht angepasst) ---------
+
   groupAreasByLocation(areas, config) {
     const grouped = {
       basement: [],
@@ -218,26 +217,29 @@ window.L30NEYNOverviewView = {
       other: [],
     };
 
-    for (const area of areas) {
-      // Skip areas with no_dboard label
-      if (area.labels && area.labels.includes('no_dboard')) {
+    for (const area of areas || []) {
+      if (area.labels && area.labels.includes("no_dboard")) {
         continue;
       }
 
-      const id = area.area_id.toLowerCase();
-      const name = area.name.toLowerCase();
+      const id = (area.area_id || "").toLowerCase();
+      const name = (area.name || "").toLowerCase();
 
-      if (id.includes('keller') || name.includes('keller')) {
+      if (id.includes("keller") || name.includes("keller")) {
         grouped.basement.push(area);
-      } else if (id.includes('gast') || name.includes('gast')) {
+      } else if (id.includes("gast") || name.includes("gast")) {
         grouped.guestroom.push(area);
-      } else if (id.includes('kuche') || id.includes('küche') || name.includes('küche')) {
+      } else if (
+        id.includes("kuche") ||
+        id.includes("küche") ||
+        name.includes("küche")
+      ) {
         grouped.kitchen.push(area);
-      } else if (id.includes('wohnzimmer') || name.includes('wohnzimmer')) {
+      } else if (id.includes("wohnzimmer") || name.includes("wohnzimmer")) {
         grouped.livingroom.push(area);
-      } else if (id.includes('oben') || id.includes('upper') || name.includes('oben')) {
+      } else if (id.includes("oben") || id.includes("upper") || name.includes("oben")) {
         grouped.upper.push(area);
-      } else if (id.includes('erdgeschoss') || id.includes('ground')) {
+      } else if (id.includes("erdgeschoss") || id.includes("ground")) {
         grouped.ground.push(area);
       } else {
         grouped.other.push(area);
@@ -247,62 +249,67 @@ window.L30NEYNOverviewView = {
     return grouped;
   },
 
-  /**
-   * Build individual area card
-   * @param {Object} area - Area object
-   * @param {Object} hass - Home Assistant object
-   * @param {Array} entities - Entity registry
-   * @param {Array} devices - Device registry
-   * @param {Object} config - Strategy config
-   * @returns {Object} Area card config
-   */
   buildAreaCard(area, hass, entities, devices, config) {
     return {
-      type: 'button',
+      type: "button",
       name: area.name,
-      icon: area.icon || 'mdi:home',
+      icon: area.icon || "mdi:home",
       tap_action: {
-        action: 'navigate',
+        action: "navigate",
         navigation_path: area.area_id,
       },
       show_state: false,
     };
   },
 
-  /**
-   * Find weather entity
-   * @param {Object} hass - Home Assistant object
-   * @returns {string|null} Weather entity ID
-   */
   findWeatherEntity(hass) {
     if (!hass?.states) return null;
-    const weatherEntities = Object.keys(hass.states).filter(id => id.startsWith('weather.'));
+    const weatherEntities = Object.keys(hass.states).filter((id) =>
+      id.startsWith("weather.")
+    );
     return weatherEntities[0] || null;
   },
 
-  /**
-   * Get time-based greeting
-   * @returns {string} Greeting message
-   */
   getGreeting() {
     const hour = new Date().getHours();
-    if (hour < 6) return '🌙 Gute Nacht';
-    if (hour < 12) return '☀️ Guten Morgen';
-    if (hour < 18) return '🌤️ Guten Tag';
-    return '🌙 Guten Abend';
+    if (hour < 6) return "Gute Nacht";
+    if (hour < 12) return "Guten Morgen";
+    if (hour < 18) return "Guten Tag";
+    return "Guten Abend";
   },
 
-  /**
-   * Get formatted date string
-   * @returns {string} Date string
-   */
   getDateString() {
     const now = new Date();
-    const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-    const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-    
-    return `${days[now.getDay()]}, ${now.getDate()}. ${months[now.getMonth()]} ${now.getFullYear()}`;
+    const days = [
+      "Sonntag",
+      "Montag",
+      "Dienstag",
+      "Mittwoch",
+      "Donnerstag",
+      "Freitag",
+      "Samstag",
+    ];
+    const months = [
+      "Januar",
+      "Februar",
+      "März",
+      "April",
+      "Mai",
+      "Juni",
+      "Juli",
+      "August",
+      "September",
+      "Oktober",
+      "November",
+      "Dezember",
+    ];
+
+    return `${days[now.getDay()]}, ${now.getDate()}. ${
+      months[now.getMonth()]
+    } ${now.getFullYear()}`;
   },
 };
 
-console.info('[L30NEYN Overview View] Module loaded - v2.2.0 ✓ Column Layout: data-column + data-order');
+console.info(
+  "[L30NEYN Overview View] Module loaded - v2.3.0 • sections layout with summary block"
+);
