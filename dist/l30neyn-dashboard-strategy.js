@@ -525,31 +525,139 @@
       try {
         const { entities = [], devices = [], areas = [] } = registry;
 
+        // Security- und Batterie-Daten einmalig sammeln, damit wir sie
+        // sowohl für den Zusammenfassungsblock als auch für die rechte Spalte nutzen können.
+        const sec = Collectors.collectSecurity(hass, entities);
+        const bats = Collectors.collectBatteries(hass, entities, config);
+
         const hour = new Date().getHours();
         const greeting = hour < 6 ? 'Gute Nacht' : hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
 
-        // ── Spalte Links: Widgets ──────────────────────────────────────────────
-        const leftCol = [];
-        leftCol.push(Cards.title(greeting, 'Smart Home Übersicht'));
+        // ── Spalte Links: Begrüßung + Zusammenfassungsblock + Widgets ─────────
+const leftCol = [];
+leftCol.push(Cards.title(greeting, 'Smart Home Übersicht'));
 
-        if (config.show_clock_favorites !== false) {
-          const widgetOrder   = resolveWidgetOrder(config);
-          const weatherEntity = config.weather_entity || Object.keys(hass.states || {}).find(id => id?.startsWith('weather.'));
+// OPTIONAL: Zusammenfassungsblock (per Config abschaltbar)
+if (config.show_summary_block !== false) {
+  // Alle Lichter
+  const allLights = entities.filter((e) => e?.entity_id?.startsWith('light.'));
+  const lightsOnCount = allLights.filter(
+    (e) => hass.states[e.entity_id]?.state === 'on'
+  ).length;
 
-          for (const widget of widgetOrder) {
-            if (widget.key === 'weather') {
-              if (weatherEntity) leftCol.push(Cards.weather(weatherEntity));
-            } else if (widget.key === 'clock') {
-              leftCol.push(Cards.clock());
-            } else if (widget.key === 'calendar') {
-              if (config.calendar_entity !== false) {
-                const calEntity = config.calendar_entity || detectCalendarEntity(hass);
-                if (calEntity && hass.states[calEntity]) {
-                  leftCol.push(Cards.calendar(calEntity));
-                }
-              }
-            }
-          }
+  // Alle Rollos
+  const allCovers = entities.filter((e) => e?.entity_id?.startsWith('cover.'));
+  const coversOpenCount = allCovers.filter(
+    (e) => hass.states[e.entity_id]?.state === 'open'
+  ).length;
+
+  // „Unsichere“ Elemente: nicht verriegelte Schlösser + offene Türen/Fenster
+  const unsafeCount =
+    (sec.locks || []).filter((id) => {
+      const s = hass.states[id];
+      return s && s.state && s.state !== 'locked';
+    }).length +
+    (sec.doors || []).filter((id) => hass.states[id]?.state === 'on').length +
+    (sec.windows || []).filter((id) => hass.states[id]?.state === 'on').length;
+
+  // Kritische Batterien
+  const criticalBatteryCount = (bats.critical || []).length;
+
+  const summaryCards = [
+    {
+      type: 'custom:mushroom-template-card',
+      primary:
+        lightsOnCount === 0 ? 'Alle Lichter aus' : `${lightsOnCount} Lichter an`,
+      icon: 'mdi:lightbulb-group',
+      icon_color: lightsOnCount === 0 ? 'green' : 'amber',
+      fill_container: true,
+    },
+    {
+      type: 'custom:mushroom-template-card',
+      primary:
+        coversOpenCount === 0
+          ? 'Alle Rollos geschlossen'
+          : `${coversOpenCount} Rollos offen`,
+      icon: 'mdi:window-shutter',
+      icon_color: coversOpenCount === 0 ? 'green' : 'blue',
+      fill_container: true,
+    },
+    {
+      type: 'custom:mushroom-template-card',
+      primary: unsafeCount === 0 ? 'Alles sicher' : `${unsafeCount} unsicher`,
+      icon: 'mdi:shield-home',
+      icon_color: unsafeCount === 0 ? 'green' : 'orange',
+      fill_container: true,
+    },
+    {
+      type: 'custom:mushroom-template-card',
+      primary:
+        criticalBatteryCount === 0
+          ? 'Batterien ok'
+          : `${criticalBatteryCount} Batterien kritisch`,
+      icon: 'mdi:battery-alert',
+      icon_color: criticalBatteryCount === 0 ? 'green' : 'red',
+      fill_container: true,
+    },
+  ];
+
+  leftCol.push({
+    type: 'vertical-stack',
+    cards: [
+      Cards.title('Zusammenfassungen'),
+      {
+        type: 'grid',
+        columns: 2,
+        square: false,
+        cards: summaryCards,
+      },
+    ],
+  });
+}
+
+// Widgets (Wetter, Uhr, Kalender, Favoriten) wie bisher
+if (config.show_clock_favorites !== false) {
+  const widgetOrder = resolveWidgetOrder(config);
+  const weatherEntity =
+    config.weather_entity ||
+    Object.keys(hass.states || {}).find((id) => id?.startsWith('weather.'));
+
+  for (const widget of widgetOrder) {
+    if (widget.key === 'weather') {
+      if (weatherEntity) leftCol.push(Cards.weather(weatherEntity));
+    } else if (widget.key === 'clock') {
+      leftCol.push(Cards.clock());
+    } else if (widget.key === 'calendar') {
+      if (config.calendar_entity !== false) {
+        const calEntity = config.calendar_entity || detectCalendarEntity(hass);
+        if (calEntity && hass.states[calEntity]) {
+          leftCol.push(Cards.calendar(calEntity));
+        }
+      }
+    }
+  }
+
+  const favEntities = config.favorite_entities || [];
+  if (favEntities.length > 0) {
+    const favChips = favEntities
+      .slice(0, 6)
+      .filter((id) => hass.states[id])
+      .map((id) => ({
+        type: 'entity',
+        entity: id,
+        tap_action: { action: 'more-info' },
+      }));
+
+    if (favChips.length) {
+      leftCol.push({
+        type: 'custom:mushroom-chips-card',
+        chips: favChips,
+        alignment: 'center',
+      });
+    }
+  }
+}
+
 
           const favEntities = config.favorite_entities || [];
           if (favEntities.length > 0) {
@@ -611,7 +719,6 @@
         const rightCol = [];
 
         if (config.show_security !== false) {
-          const sec = Collectors.collectSecurity(hass, entities);
           if (sec.locks.length || sec.doors.length || sec.windows.length || sec.alarm) {
             rightCol.push(Cards.title('Sicherheit'));
             const secCards = [];
@@ -624,7 +731,6 @@
         }
 
         if (config.show_battery_status !== false) {
-          const bats = Collectors.collectBatteries(hass, entities, config);
           if (bats.critical.length || bats.low.length) {
             rightCol.push(Cards.title('Batterie-Warnung'));
             bats.critical.forEach(id => rightCol.push(Cards.entity(id, { icon_color: 'red' })));
@@ -718,12 +824,13 @@ const threeColLayout = {
 };
 
 
-        return {
-          title: 'Übersicht',
-          path: 'overview',
-          icon: 'mdi:home',
-          cards: [threeColLayout],
-        };
+return {
+  title: 'Übersicht',
+  path: 'overview',
+  icon: 'mdi:home',
+  panel: true,               // NEU: Übersicht als Panel
+  cards: [threeColLayout],
+};
       } catch (e) {
         return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
       }
@@ -1206,6 +1313,7 @@ const threeColLayout = {
       return {
         show_areas: true, show_security: true, show_battery_status: true,
         show_clock_favorites: true, show_domain_overviews: true,
+        show_summary_block: true,
         favorite_entities: [], domain_groups: [],
         floor_grouping: { enabled: false },
         navigation: {}, areas_options: {}, column_order: [], area_order: [], battery_entities: [],
