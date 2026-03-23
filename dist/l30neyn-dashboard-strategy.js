@@ -1,13 +1,13 @@
 /**
  * L30NEYN Dashboard Strategy
- * @version 2.3.0
+ * @version 2.3.2
  * @license MIT
  */
 
 (function () {
   'use strict';
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.3.2';
   console.info('[L30NEYN] Loading dashboard strategy v' + VERSION);
 
   // ════════════════════════════════════════════════════════════════════════════════
