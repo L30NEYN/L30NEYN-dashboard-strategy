@@ -522,7 +522,6 @@
 
   const OverviewView = {
     async generate(hass, config, registry, basePath) {
-      try {
         const { entities = [], devices = [], areas = [] } = registry;
 
         // Security- und Batterie-Daten einmalig sammeln, damit wir sie
@@ -831,9 +830,7 @@ return {
   panel: true,               // NEU: Übersicht als Panel
   cards: [threeColLayout],
 };
-      } catch (e) {
-        return { title: 'Übersicht', path: 'overview', icon: 'mdi:home', cards: [Cards.error(e.message)] };
-      }
+      } 
     },
   };
 
